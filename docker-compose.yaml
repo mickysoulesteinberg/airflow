@@ -149,6 +149,8 @@ services:
 
   airflow-worker:
     <<: *airflow-common
+    volumes:
+      - ./requirements.txt:/requirements.txt
     command: celery worker
     healthcheck:
       # yamllint disable rule:line-length
