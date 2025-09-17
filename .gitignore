@@ -1,0 +1,21 @@
+# Airflow runtime files
+logs/
+__pycache__/
+*.pyc
+
+# Environment files
+.env
+*.env
+
+# Docker stuff
+*.pid
+*.db
+*.sqlite
+
+# VS Code
+.vscode/
+
+# Python virtual environments
+venv/
+.env/
+.venv/
