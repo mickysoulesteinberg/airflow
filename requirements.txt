@@ -1,2 +1,3 @@
 apache-airflow-providers-imap
 apache-airflow-providers-google
+requests

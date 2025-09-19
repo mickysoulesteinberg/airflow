@@ -24,5 +24,10 @@ venv/
 *.db
 *.sqlite
 
-# Other/Miscellaneous
+# Mac system files
 .DS_Store
+
+# Ignore placeholder/test/dev files and folders
+*_scratch_*
+*_test_*
+*_todo_*

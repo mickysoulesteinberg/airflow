@@ -24,10 +24,15 @@ x-airflow-common: &airflow-common
     # The following line can be used to set a custom config file, stored in the local config folder
     # If you want to use it, outcomment it and replace airflow.cfg with the name of your config file
     # AIRFLOW_CONFIG: '/opt/airflow/config/airflow.cfg'
+    # GMAIL Credentials
     GMAIL_USER: ${GMAIL_USER}
     GMAIL_PASSWORD: ${GMAIL_PASSWORD}
+    # Google Cloud / BigQuery
     GCP_PROJECT_ID: ${GCP_PROJECT_ID}
     GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS}
+    # Spotify
+    SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID}
+    SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET}
   volumes:
     - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
     - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs

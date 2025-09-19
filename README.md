@@ -65,3 +65,12 @@ Getting setup with Airflow.
 - Commands I ran:
 
 - Errors I hit and fixes:
+
+# Spotify 
+
+## Setup
+
+1. Create an app (Web API) at developer.spotify.com. See [Getting Started with Web API](https://developer.spotify.com/documentation/web-api/tutorials/getting-started)
+
+
+
