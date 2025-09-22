@@ -1,0 +1,14 @@
+environments:
+  dev:
+    tmdb:
+      gcs_bucket: raw-tmdb-dev
+      bq_dataset_staging: staging_tmdb_dev
+    airflow:
+      bq_dataset_meta: airflow_meta_dev
+
+  prod:
+    tmdb:
+      gcs_bucket: raw-tmdb-prod
+      bq_dataset_staging: staging_tmdb_prod
+    airflow:
+      bq_dataset_meta: airflow_meta_prod
