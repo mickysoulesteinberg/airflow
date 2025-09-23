@@ -4,7 +4,7 @@ import logging
 from utils.config import CFG
 
 logger = logging.getLogger(__name__)
-PROJECT = os.getenv('GCP_PROJECT')
+PROJECT = os.getenv('GCP_PROJECT_ID')
 client = bigquery.Client(project=PROJECT)
 
 

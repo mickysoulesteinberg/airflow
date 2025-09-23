@@ -1,11 +1,11 @@
 from google.cloud import storage
 import json, logging
-from config import CFG
+from utils.config import CFG
 
 logger = logging.getLogger(__name__)
 client = storage.Client()
 
-def upload_json_to_gcs(api: str, data: dict, path: str, dag_id: str):
+def write_json(api: str, data: dict, path: str, dag_id: str):
     bucket_name = CFG[api]['gcs_bucket']
     bucket = client.bucket(bucket_name)
     full_path = f'{dag_id}/{path}'

@@ -2,7 +2,7 @@ from airflow.decorators import dag, task
 from airflow.utils.dates import days_ago
 import logging
 
-from utils.tmdb  import discover_movies_by_year, get_movie_credits
+from utils.tmdb import discover_movies_by_year, get_movie_credits
 from utils.tmdb_gcs import (
     write_tmdb_movie_json,
     write_tmdb_credits_json,
@@ -39,7 +39,10 @@ def tmdb_backfill_top_credits_dag():
         seed_status_table('tmdb', DAG_ID, 'fetch_credits', years, id_col ='year')
     
     @task
-    def pick_year():
+    def pick_year(dag_run = None):
+        override = dag_run.conf.get('year') if dag_run else None
+        if override:
+            return int(override)
         row = get_next_row('tmdb', DAG_ID, 'fetch_movies', id_col='year')
         if not row:
             logger.info('[DAG] No more years to process, exiting.')
@@ -48,7 +51,7 @@ def tmdb_backfill_top_credits_dag():
         return row['year']
 
     @task
-    def fetch_movies(year: int):
+    def fetch_movies(year: int = 2000):
         update_status('tmdb', DAG_ID, 'fetch_movies', year, 'in_progress', id_col='year')
 
         results = discover_movies_by_year(year, sort_by='popularity', sort_order='desc', page=1)
@@ -104,4 +107,4 @@ def tmdb_backfill_top_credits_dag():
         movies = fetch_movies(year)
         fetch_cast(year, movies)
 
-dag = tmdb_backfill_top_credits_dag
+dag = tmdb_backfill_top_credits_dag()

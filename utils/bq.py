@@ -1,11 +1,11 @@
 from google.cloud import bigquery
 import os, logging
-from config import CFG
+from utils.config import CFG
 
 
 logger = logging.getLogger(__name__)
 #logging.basicConfig(level = logging.INFO)
-PROJECT = os.getenv('GCP_PROJECT')
+PROJECT = os.getenv('GCP_PROJECT_ID')
 client = bigquery.Client(project = PROJECT)
 
 def insert_rows(api: str, table: str, rows: list[dict]):
@@ -31,3 +31,4 @@ def insert_rows(api: str, table: str, rows: list[dict]):
     
     logger.info(f'[BQ] Inserted {len(rows)} rows into {table_id}')
     return
+

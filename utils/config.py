@@ -4,6 +4,6 @@ CONFIG_PATH = os.getenv('CONFIG_PATH', '/opt/airflow/config/settings.yaml')
 ENV = os.getenv('ENV', 'dev')
 
 with open(CONFIG_PATH, 'r') as f:
-    config = yaml.save_load(f)
+    config = yaml.safe_load(f)
 
-CGF = config['environments'][ENV]
+CFG = config['environments'][ENV]

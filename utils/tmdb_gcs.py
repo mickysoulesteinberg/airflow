@@ -1,4 +1,4 @@
-from gcs import write_json, write_success_marker
+from utils.gcs import write_json, write_success_marker
 
 def write_tmdb_movie_json(data: dict, year: int, movie_id: int, dag_id: str):
     path = f"movies/year={year}/movie={movie_id}.json"

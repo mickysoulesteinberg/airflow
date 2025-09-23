@@ -72,7 +72,7 @@ def discover_movies_by_year(
         page = page
     )
 
-def get_credits(movie_id: int) -> dict:
+def get_movie_credits(movie_id: int) -> dict:
     '''
     Wrapper for movie/{movie_id}/credits endpoint.
     
@@ -92,3 +92,21 @@ def get_movie_details(movie_id: int) -> dict:
         movie_id (int): TMDb movie ID   
     '''
     return tmdb_get(f'movie/{movie_id}')
+
+def api_call(api, path, params = None):
+    api_config = CFG['apis'][api]
+    base_url = api_config['base_url']
+    auth = api_config['auth']
+    path_config = api_config['paths'][path] # How do I dynamically traverse the path here?
+    
+    # Maybe different logic depending on authorization or other factors
+    if auth = ...
+        url = base_url + path_config['endpoint']
+        headers = # Something using params?
+    else...
+    
+    return url, headers
+
+def get_spotify_song(song_id, token):
+    url, headers = api_call('spotify', 'songs')
+    # do more stuff
