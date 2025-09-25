@@ -2,15 +2,15 @@ from airflow.decorators import dag, task
 from airflow.utils.dates import days_ago
 import logging
 
-from utils.tmdb import discover_movies_by_year, get_movie_credits
-from utils.tmdb_gcs import (
-    write_tmdb_movie_json,
-    write_tmdb_credits_json,
-    mark_tmdb_movies_success,
-    mark_tmdb_credits_success
-)
-from utils.tmdb_bq import insert_tmdb_movies, insert_tmdb_credits
-from utils.status import get_next_row, create_status_table, seed_status_table, update_status
+from apis.tmdb import discover_movies_by_year, get_movie_credits
+# from apis._scratch_tmdb_gcs import (
+#     write_tmdb_movie_json,
+#     write_tmdb_credits_json,
+#     mark_tmdb_movies_success,
+#     mark_tmdb_credits_success
+# )
+# from apis._scratch_tmdb_bq import insert_tmdb_movies, insert_tmdb_credits
+from core._scratch_status import get_next_row, create_status_table, seed_status_table, update_status
 
 logger = logging.getLogger(__name__)
 

@@ -6,4 +6,8 @@ ENV = os.getenv('ENV', 'dev')
 with open(CONFIG_PATH, 'r') as f:
     config = yaml.safe_load(f)
 
-CFG = config['environments'][ENV]
+# Environment-specific configurations
+CONFIG = config['environments'][ENV]
+
+# Full settings tree if needed for other settings
+FULL_CONFIG = config
