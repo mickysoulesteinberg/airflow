@@ -8,6 +8,3 @@ with open(CONFIG_PATH, 'r') as f:
 
 # Environment-specific configurations
 CONFIG = config['environments'][ENV]
-
-# Full settings tree if needed for other settings
-FULL_CONFIG = config

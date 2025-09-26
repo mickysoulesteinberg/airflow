@@ -1,8 +1,8 @@
 import os, requests, logging, time
-from utils.config import FULL_CONFIG
+from utils.config import CONFIG
 
 # Get the configuration settings for APIs
-API_CONFIG = FULL_CONFIG['apis']
+API_CONFIG = CONFIG['apis']
 
 # Configure logger
 logger = logging.getLogger(__name__)

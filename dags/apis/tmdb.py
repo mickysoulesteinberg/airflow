@@ -1,5 +1,5 @@
 import os, requests, logging
-from utils.config import FULL_CONFIG
+from utils.config import CONFIG
 from core.api import api_get
 
 # Configure logger
@@ -7,15 +7,15 @@ logger = logging.getLogger(__name__)
 
 # TMDb API config
 API_KEY = os.getenv("TMDB_API_KEY")  # store key in .env
-API_CONFIG = FULL_CONFIG['apis']['tmdb']
+API_CONFIG = CONFIG['apis']['tmdb']
 BASE_URL = API_CONFIG['base_url']
 
 if not API_KEY:
     raise EnvironmentError('TMDB_API_KEY not found in environment variables.')
 
 # Generic TMDb API call
-def tmdb_get(path, path_vars = None, params = None):
-    return api_get('tmdb', path, path_vars = path_vars, params = params)
+def tmdb_get(api_path, api_path_vars = None, api_params = None):
+    return api_get('tmdb', api_path, api_path_vars = api_path_vars, api_params = api_params)
 
 
 # ---- Wrappers for common endpoints ----
@@ -32,7 +32,7 @@ def discover_movies_by_year(year, sort_by = 'revenue', sort_order = 'desc', page
     Returns:
         dict: JSON response parsed to dictionary
     '''
-    return tmdb_get('discover_movies', params = {'primary_release_year': year, 'sort_by': f'{sort_by}.{sort_order}', 'page': page})
+    return tmdb_get('discover_movies', api_params = {'primary_release_year': year, 'sort_by': f'{sort_by}.{sort_order}', 'page': page})
 
 
 def get_movie_details(movie_id):
@@ -42,7 +42,7 @@ def get_movie_details(movie_id):
     Args:
         movie_id (int): TMDb movie ID   
     '''
-    return tmdb_get('movies', path_vars={'movie_id': movie_id})
+    return tmdb_get('movies', api_path_vars={'movie_id': movie_id})
 
 def get_movie_credits(movie_id):
     '''
@@ -54,6 +54,6 @@ def get_movie_credits(movie_id):
     Returns:
         dict: JSON response parsed to dictionary
     '''
-    return tmdb_get('movies_credits', path_vars = {'movie_id': movie_id})
+    return tmdb_get('movies_credits', api_path_vars = {'movie_id': movie_id})
 
 

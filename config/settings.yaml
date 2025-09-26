@@ -1,32 +1,44 @@
+# Default API configs (anchors) — shared across environments
+spotify: &spotify_defaults
+  auth: oauth2
+  base_url: https://api.spotify.com/v1/
+  token_url: https://accounts.spotify.com/api/token
+  default_headers:
+    Accept: application/json
+  paths:
+    songs:
+      endpoint: /tracks/{song_id}
+    artists:
+      endpoint: /artists/{artist_id}
+
+tmdb: &tmdb_defaults
+  auth: api_key
+  base_url: https://api.themoviedb.org/3/
+  default_headers:
+    Accept: application/json
+  paths:
+    movies:
+      endpoint: /movie/{movie_id}
+    movies_credits:
+      endpoint: /movie/{movie_id}/credits
+    discover_movies:
+      endpoint: /discover/movie
+
+
+# Environments
 environments:
   dev:
-    gcs_bucket: airflow-dev
+    gcs_bucket: airflow-tidal-mason-dev
+    apis:
+      spotify:
+        <<: *spotify_defaults
+      tmdb:
+        <<: *tmdb_defaults
 
   prod:
-    gcs_bucket: airflow-prod
-
-apis:
-  spotify:
-    auth: oauth2
-    base_url: https://api.spotify.com/v1/
-    token_url: https://accounts.spotify.com/api/token
-    default_headers:
-      Accept: application/json
-    paths:
-      songs:
-        endpoint: /tracks/{song_id}
-      artists:
-        endpoint: artists/{artist_id}
-
-  tmdb:
-    auth: api_key
-    base_url: https://api.themoviedb.org/3/
-    default_headers:
-      Accept: application/json
-    paths:
-      movies:
-        endpoint: /movie/{movie_id}
-      movies_credits:
-        endpoint: /movie/{movie_id}/credits
-      discover_movies:
-        endpoint: /discover/movie
+    gcs_bucket: airflow-tidal-mason-prod # Does not exist yet
+    apis:
+      spotify:
+        <<: *spotify_defaults
+      tmdb:
+        <<: *tmdb_defaults
