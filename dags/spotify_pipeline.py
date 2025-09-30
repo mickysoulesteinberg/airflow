@@ -1,45 +1,58 @@
 from airflow.decorators import dag, task
 from airflow.utils.dates import days_ago
 from task_groups.ingestion import api_to_gcs
+import tasks.ingestion as ingestion_tasks
+
 from core.api import get_oauth2_token
 import logging
 
 logger = logging.getLogger(__name__)
 
-API = 'spotify'
-DAG_ID = 'spotify_pipeline'
 ARTIST_ID = '06HL4z0CvFAxyc27GXpf02'  # Taylor Swift's Spotify Artist ID
-# TOKEN_DATA = get_oauth2_token(API)
-# logger.warning(f'TOKEN_DATA={TOKEN_DATA}')
+API = 'spotify'
 
 @dag(
         start_date=days_ago(1), 
         schedule="@daily", 
         catchup=False
-    )
+)
 def spotify_pipeline():    
     @task
     def get_token(**context):
         token_data = get_oauth2_token(API)
         return token_data
 
-    api_path_vars = {
-        'artist_id': ARTIST_ID
-    }
+    api_path_vars = {'artist_id': ARTIST_ID}
+    api_path = 'artists'
 
-    # Run Task Group to load movies to GCS & BigQuery, retain list of movie IDs for second run
-    api_to_gcs(
+    # Get the uri to store the data
+    gcs_uri = ingestion_tasks.get_storage_data(
         api = API,
-        api_path = 'artists',
-        api_args = {
-            'path_vars': api_path_vars,
-            'token_data': get_token(),
-            'call_id': f'artist{ARTIST_ID}'
-        }
-
+        api_path = api_path,
+        call_params = {'artist': ARTIST_ID}
     )
 
-spotify_pipeline()
+    ingestion_tasks.api_fetch(
+        api = API,
+        api_path = api_path,
+        api_args = {
+            'path_vars': {'artist_id': ARTIST_ID},
+            'token_data': get_token()
+        },
+        gcs_uri = gcs_uri,
+        return_data = {
+            'artist_id': 'id',
+            'artist_name': 'name',
+            'artist_popularity': 'popularity',
+            'spotify_url': 'external_urls.spotify',
+            'genres': 'genres[]', #empty for taylor
+            'main_image': 'images[0].url',
+            'thumbnail_image': 'images[-1].url',
+            'all_image_urls': 'images[].url',
+            'all_image_heights': 'images[].height',
+            'followers': 'followers.total'
+        }
+    )
 
-# artist_data = _scratch_spotify.spotify_get(f'artists/{artist_id}', creds=creds)
-# api_get('spotify', 'artists/{artist_id}', api_path_vars = {'artist_id': ARTIST_ID})
+
+spotify_pipeline()

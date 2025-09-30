@@ -17,15 +17,15 @@ def get_gcs_client():
 
 # def build_gcs_path(dag_id, api, api_path, gcs_file_name):
 #     # Builds the gcs path based on context
-#     gcs_path = f'{dag_id}/{api}/{api_path}/{gcs_file_name}'
-#     logger.warning(f'gcs_path={gcs_path}')
-#     return gcs_path
+#     gcs_uri = f'{dag_id}/{api}/{api_path}/{gcs_file_name}'
+#     logger.warning(f'gcs_uri={gcs_uri}')
+#     return gcs_uri
 
-def upload_to_gcs(gcs_path, data, gcs_bucket = None):
+def upload_to_gcs(gcs_uri, data, gcs_bucket = None):
     # Uploads data to gcs and returns the uri
     client = get_gcs_client()
     bucket_name = gcs_bucket or BUCKET
-    blob_name = gcs_path
+    blob_name = gcs_uri
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(blob_name)
     blob.upload_from_string(json.dumps(data), content_type = 'application/json')

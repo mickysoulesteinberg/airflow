@@ -9,40 +9,43 @@ from airflow.operators.python import get_current_context
 logger = logging.getLogger(__name__)
 
 @task
-def get_storage_data(api, api_path, api_args):
+def get_storage_data(api, api_path, call_params = None):
 
     # Get context to use in file path
     context = get_current_context()
-
-    # Get GCS file name from dynamic API parameters
-    call_params = api_args.get('call_params', {})
-    call_id = '-'.join(f'{key}{value}' for key,value in call_params.items())
     ds_nodash = context['ds_nodash']
-    gcs_file_name = f'{call_id}-{ds_nodash}.json'.strip('-')
+
+    # Define file name based on date (default)
+    gcs_file_name = f'{ds_nodash}.json'
+
+    # Append GCS file name from dynamic API parameters
+    if call_params:
+        call_id = '-'.join(f'{key}{value}' for key,value in call_params.items())
+        gcs_file_name = f'{call_id}-{gcs_file_name}'
 
     # Get GCS File path from dag and api info
     dag_id = context['dag'].dag_id
-    gcs_path = f'{dag_id}/{api}/{api_path}/{gcs_file_name}'
+    gcs_uri = f'{dag_id}/{api}/{api_path}/{gcs_file_name}'
 
-    return gcs_path
+    return gcs_uri
 
-@task
-def api_fetch(api, api_path, api_args, gcs_path = None, x_com_data = None):
+@task(multiple_outputs = True)
+def api_fetch(api, api_path, api_args, gcs_uri = None, return_data = None):
 
     # Initiate results dictionary to return
     results = {}
 
     # Get API data as JSON
-    data = api_get(api, path = api_path, **get_valid_kwargs(api_get, api_args))
+    # data = api_get(api, path = api_path, **get_valid_kwargs(api_get, api_args))
+    data = api_get(api, path = api_path, **api_args)
 
-    # If gcs_path is specified, load the raw data directly to GCS
-    if gcs_path:
-        gcs_uri = upload_to_gcs(gcs_path, data)
-        results['gcs_uri'] = gcs_uri
+    # If gcs_uri is specified, load the raw data directly to GCS
+    if gcs_uri:
+        gcs_uri = upload_to_gcs(gcs_uri, data)
     
-    # If x_com_data is specified, extract the data to return to XCom
-    if x_com_data:
-        for key, expr in x_com_data.items():
+    # If return_data is specified, extract the data to return to XCom
+    if return_data:
+        for key, expr in return_data.items():
             results[key] = jmespath.search(expr, data)
         
     return results
@@ -56,3 +59,4 @@ def transform_data():
 @task
 def load_data():
     logger.warning('load_data:Loading transformed data into BigQuery')
+
