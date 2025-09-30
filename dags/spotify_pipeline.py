@@ -1,6 +1,6 @@
 from airflow.decorators import dag, task
 from airflow.utils.dates import days_ago
-from task_groups.ingestion import api_fetch_and_load
+from task_groups.ingestion import api_to_gcs
 from core.api import get_oauth2_token
 import logging
 
@@ -28,7 +28,7 @@ def spotify_pipeline():
     }
 
     # Run Task Group to load movies to GCS & BigQuery, retain list of movie IDs for second run
-    api_fetch_and_load(
+    api_to_gcs(
         api = API,
         api_path = 'artists',
         api_args = {
