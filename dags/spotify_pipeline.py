@@ -1,6 +1,5 @@
 from airflow.decorators import dag, task
 from airflow.utils.dates import days_ago
-from task_groups.ingestion import api_to_gcs
 import tasks.ingestion as ingestion_tasks
 
 from core.api import get_oauth2_token
@@ -22,7 +21,6 @@ def spotify_pipeline():
         token_data = get_oauth2_token(API)
         return token_data
 
-    api_path_vars = {'artist_id': ARTIST_ID}
     api_path = 'artists'
 
     # Get the uri to store the data
