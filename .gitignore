@@ -31,3 +31,13 @@ venv/
 *_scratch_*
 *_test_*
 *_todo_*
+
+# Ignore Airflow auto-generated config files
+airflow.cfg
+webserver_config.py
+
+# In case Airflow drops them in dags/ or elsewhere
+dags/airflow.cfg
+dags/webserver_config.py
+*/airflow.cfg
+*/webserver_config.py

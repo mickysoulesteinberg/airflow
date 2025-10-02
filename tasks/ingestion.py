@@ -25,30 +25,30 @@ def get_storage_data(api, api_path, call_params = None):
 
     # Get GCS File path from dag and api info
     dag_id = context['dag'].dag_id
-    gcs_uri = f'{dag_id}/{api}/{api_path}/{gcs_file_name}'
+    gcs_path = f'{dag_id}/{api}/{api_path}/{gcs_file_name}'
 
-    return gcs_uri
+    return gcs_path
 
 @task(multiple_outputs = True)
-def api_fetch(api, api_path, api_args, gcs_uri = None, return_data = None):
+def api_fetch(api, api_path, api_args, gcs_path = None, return_data = None):
 
     # Initiate results dictionary to return
-    results = {}
+    return_dict = {}
 
     # Get API data as JSON
     # data = api_get(api, path = api_path, **get_valid_kwargs(api_get, api_args))
     data = api_get(api, path = api_path, **api_args)
 
     # If gcs_uri is specified, load the raw data directly to GCS
-    if gcs_uri:
-        gcs_uri = upload_to_gcs(gcs_uri, data)
+    if gcs_path:
+        upload_to_gcs(path = gcs_path, data = data)
     
     # If return_data is specified, extract the data to return to XCom
     if return_data:
         for key, expr in return_data.items():
-            results[key] = jmespath.search(expr, data)
+            return_dict[key] = jmespath.search(expr, data)
         
-    return results
+    return return_dict
 
 
 

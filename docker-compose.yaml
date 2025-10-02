@@ -1,7 +1,4 @@
 x-airflow-common: &airflow-common
-  # In order to add custom dependencies or upgrade provider packages you can use your extended image.
-  # Comment the image line, place your Dockerfile in the directory where you placed the docker-compose.yaml
-  # and uncomment the "build" line below, Then run `docker-compose build` to build the images.
   image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:2.10.2}
   # build: .
   environment: &airflow-common-env
@@ -11,32 +8,45 @@ x-airflow-common: &airflow-common
     AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
     AIRFLOW__CORE__FERNET_KEY: ''
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
     AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
-    # WARNING: Use _PIP_ADDITIONAL_REQUIREMENTS option ONLY for a quick checks
-    # for other purpose (development, test and especially production usage) build/extend Airflow image.
     _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
-    # GMAIL Credentials
+    # --GMAIL Credentials
     GMAIL_USER: ${GMAIL_USER}
     GMAIL_PASSWORD: ${GMAIL_PASSWORD}
-    # Google Cloud / BigQuery
+    # --Google Cloud / BigQuery
     GCP_PROJECT_ID: ${GCP_PROJECT_ID}
     GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS}
-    # Spotify
+    AIRFLOW_CONN_GOOGLE_CLOUD_DEFAULT: google-cloud-platform://?extra__google_cloud_platform__project=${GCP_PROJECT_ID}&extra__google_cloud_platform__key_path=${GOOGLE_APPLICATION_CREDENTIALS}
+    # --Spotify
     SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID}
     SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET}
-    # TMDB
+    # --TMDB
     TMDB_API_KEY: ${TMDB_API_KEY}
-    # PYTHON
-    PYTHONPATH: /opt/airflow/dags
+    # --PYTHON
+    PYTHONPATH: /opt/airflow
   volumes:
+    # --DAGs
     - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
+    # --Supporting folders
     - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
-    - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
+    - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
     - ${AIRFLOW_PROJ_DIR:-.}/keys:/opt/airflow/keys
+    # --Extra code repos
+    - ${AIRFLOW_PROJ_DIR:-.}/apis:/opt/airflow/apis
+    - ${AIRFLOW_PROJ_DIR:-.}/tasks:/opt/airflow/tasks
+    - ${AIRFLOW_PROJ_DIR:-.}/core:/opt/airflow/core
+    - ${AIRFLOW_PROJ_DIR:-.}/schemas:/opt/airflow/schemas
+    - ${AIRFLOW_PROJ_DIR:-.}/transforms:/opt/airflow/transforms
+    - ${AIRFLOW_PROJ_DIR:-.}/utils:/opt/airflow/utils
+    # --Scripts
+    - ${AIRFLOW_PROJ_DIR:-.}/scripts:/opt/airflow/scripts
+    # --Requirements for pip install
     - ./requirements.txt:/requirements.txt
+
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
     &airflow-common-depends-on
@@ -62,8 +72,6 @@ services:
     restart: always
 
   redis:
-    # Redis is limited to 7.2-bookworm due to licencing change
-    # https://redis.io/blog/redis-adopts-dual-source-available-licensing/
     image: redis:7.2-bookworm
     expose:
       - 6379
@@ -121,8 +129,6 @@ services:
       start_period: 30s
     environment:
       <<: *airflow-common-env
-      # Required to handle warm shutdown of the celery workers properly
-      # See https://airflow.apache.org/docs/docker-stack/entrypoint.html#signal-propagation
       DUMB_INIT_SETSID: "0"
     restart: always
     depends_on:
