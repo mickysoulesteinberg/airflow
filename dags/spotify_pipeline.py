@@ -17,14 +17,14 @@ API = 'spotify'
 )
 def spotify_pipeline():    
     @task
-    def get_token(**context):
+    def get_token():
         token_data = get_oauth2_token(API)
         return token_data
 
     api_path = 'artists'
 
-    # Get the uri to store the data
-    gcs_uri = ingestion_tasks.get_storage_data(
+    # Get the GCS Path to store the data
+    gcs_path = ingestion_tasks.get_storage_data(
         api = API,
         api_path = api_path,
         call_params = {'artist': ARTIST_ID}
@@ -37,7 +37,7 @@ def spotify_pipeline():
             'path_vars': {'artist_id': ARTIST_ID},
             'token_data': get_token()
         },
-        gcs_uri = gcs_uri,
+        gcs_path = gcs_path,
         return_data = {
             'artist_id': 'id',
             'artist_name': 'name',
