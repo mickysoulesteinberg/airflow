@@ -1,11 +1,12 @@
 from google.cloud import bigquery
-import logging, os
+import logging, os, textwrap
 
 # Environment variables
 PROJECT_ID = os.getenv('GCP_PROJECT_ID')
 
 logger = logging.getLogger(__name__)
 
+# Get a BQ Client
 def get_bq_client(project_id=PROJECT_ID):
     '''
     Creates and returns a new BigQuery client.
@@ -13,6 +14,7 @@ def get_bq_client(project_id=PROJECT_ID):
     '''
     logger.debug(f'Creating BigQuery client (project_id={project_id})')
     return bigquery.Client(project=project_id) if project_id else bigquery.Client()
+
 
 def insert_row_json(table_id, row, project_id=None):
     '''
@@ -102,31 +104,30 @@ def create_table_if_not_exists(
             raise
 
 
+def format_stage_merge_query(staging_table, final_table, schema, merge_cols):
+    schema_cols = [col['name'] for col in schema]
+    on_clause = ' AND '.join([f'F.{col} = S.{col}' for col in merge_cols])
+    update_clause = ',\n    '.join([
+        'last_updated = CURRENT_TIMESTAMP()' if col == 'last_updated'
+        else f'{col} = S.{col}'
+        for col in schema_cols
+        if col not in merge_cols
+    ])
+    insert_cols = ', '.join(schema_cols)
+    values_clause = ', '.join([
+        'CURRENT_TIMESTAMP()' if col == 'last_updated'
+        else f'S.{col}'
+        for col in schema_cols
+    ])
 
-# # probably delete or replace
-# def insert_rows(api: str, table: str, rows: list[dict]):
-#     '''
-#     Generic BigQuery insert
-    
-#     Args:
-#         api: which API config to use (e.g. 'tmdb', 'spotify')
-#         table: table name
-#         rows: list of dicts to insert
-#     '''
-#     dataset = CFG[api]['bq_dataset_staging']
-#     table_id = f'{project_id}.{dataset}.{table}'
+    query = f'''
+    MERGE `{final_table}` F
+    USING `{staging_table}` S
+    ON {on_clause}
+    WHEN MATCHED THEN UPDATE SET
+        {update_clause}
+    WHEN NOT MATCHED THEN INSERT ({insert_cols})
+    VALUES ({values_clause});
+    '''
 
-#     if not rows:
-#         logger.info(f'[BQ] No rows to insert into {table_id}')
-#         return  
-
-#     errors = client.insert_rows_json(table_id, rows)
-#     if errors:
-#         logger.error(f'[BQ] Insert errors for {table_id}: {errors}')
-#         raise RuntimeError(errors)
-    
-#     logger.info(f'[BQ] Inserted {len(rows)} rows into {table_id}')
-#     return
-
-# def load_to_bq(data, table, dag_id = None, group_id = None):
-#     print('Uploading to BigQuery (This function is in progress)')
+    return textwrap.dedent(query).strip()

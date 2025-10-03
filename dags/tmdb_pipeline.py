@@ -7,14 +7,10 @@ import tasks.transforms as transform_tasks
 import tasks.helpers as helper_tasks
 import logging
 from schemas.tmdb import MOVIES_SCHEMA, CREDITS_SCHEMA
-from core.bq import make_bq_schema
 
 logger = logging.getLogger(__name__)
 YEARS = [2003, 2004]
 
-# -----
-# ----- Set up BigQuery Loaders
-movies_merge_factory = loader_tasks.bq_stage_merge(schema = MOVIES_SCHEMA, merge_cols = ['id'])
 
 @dag(
     start_date=days_ago(1), 
@@ -41,7 +37,9 @@ def tmdb_pipeline():
         call_params = {'year': year}
         schema_config = MOVIES_SCHEMA['schema']
         staging_table = 'tmdb.discover_movies_stg'
+        final_table = 'tmdb.discover_movies'
         json_path = ['data', 'results']
+
 
         # Get the storage info to store data and later retrieve it
         gcs_path = ingestion_tasks.get_storage_data(api, api_path, call_params = call_params)
@@ -55,9 +53,25 @@ def tmdb_pipeline():
             return_data = {'movie_ids': 'results[].id'}
         )['movie_ids']
 
-        x_insert_movie = transform_tasks.transform_and_insert(schema_config = schema_config, table_id = staging_table, gcs_path = gcs_path, json_path = json_path)
+        # Transform the raw JSON and insert to BQ staging table
+        x_insert_movie = transform_tasks.transform_and_insert(
+            schema_config = schema_config,
+            table_id = staging_table,
+            gcs_path = gcs_path,
+            json_path = json_path
+        )
 
+        # Create task to merge movies
+        movies_merge_factory = loader_tasks.bq_stage_merge(task_id = 'movies_merge', schema = schema_config, merge_cols = ['id'])
+
+        # Load the staging data into the BQ final table
+        x_merge_movie = movies_merge_factory(
+            staging_table = staging_table,
+            final_table = final_table
+        )
+        # Load GCS -> BQ after ingesting the data and saving to GCS
         movie_ids >> x_insert_movie
+        x_insert_movie >> x_merge_movie
 
         return movie_ids
 
