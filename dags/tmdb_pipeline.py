@@ -4,12 +4,13 @@ from airflow.operators.python import get_current_context
 import tasks.ingestion as ingestion_tasks
 import tasks.loaders as loader_tasks
 import tasks.transforms as transform_tasks
-from itertools import chain
+import tasks.helpers as helper_tasks
 import logging
 from schemas.tmdb import MOVIES_SCHEMA, CREDITS_SCHEMA
+from core.bq import make_bq_schema
 
 logger = logging.getLogger(__name__)
-YEARS = [2003]
+YEARS = [2003, 2004]
 
 # -----
 # ----- Set up BigQuery Loaders
@@ -33,14 +34,19 @@ def tmdb_pipeline():
         return context['params']['years']
 
     @task_group
-    def ingest_top_movies_for_year(year):
+    def ingest_and_load_top_movies_for_year(year):
+        # Parameters for this task group
         api_path = 'discover_movies'
         params = {'primary_release_year': year, 'sort_by': 'revenue.desc', 'page': 1}
+        call_params = {'year': year}
+        schema_config = MOVIES_SCHEMA['schema']
+        staging_table = 'tmdb.discover_movies_stg'
+        json_path = ['data', 'results']
 
         # Get the storage info to store data and later retrieve it
-        gcs_path = ingestion_tasks.get_storage_data(api, api_path, call_params = {'year': year})
+        gcs_path = ingestion_tasks.get_storage_data(api, api_path, call_params = call_params)
 
-        # Performa the API Call and save the data to GCS
+        # Perform the API Call and save the data to GCS (save the movie IDs for downstream tasks)
         movie_ids = ingestion_tasks.api_fetch(
             api = api,
             api_path = api_path,
@@ -49,42 +55,14 @@ def tmdb_pipeline():
             return_data = {'movie_ids': 'results[].id'}
         )['movie_ids']
 
-        return {'gcs_path': gcs_path, 'movie_ids': movie_ids}
+        x_insert_movie = transform_tasks.transform_and_insert(schema_config = schema_config, table_id = staging_table, gcs_path = gcs_path, json_path = json_path)
 
+        movie_ids >> x_insert_movie
 
-    # -----
-    # ----- Load Top Movie Data from GCS to BigQuery ----- #
-
-    @task_group
-    def load_top_movies_to_bigquery(gcs_paths):
-
-        insert_movie = transform_tasks.transform_and_insert.override(
-            task_id = 'insert_movie'
-        ).partial(
-            schema_config = MOVIES_SCHEMA,
-            table_id = 'tmdb.discover_movies_stg'
-        ).expand(
-            gcs_path = gcs_paths
-        )
-
-        return insert_movie
-
-
-
-
-    
-
-
-
-
+        return movie_ids
 
     # -----
     # ----- Get Cast Data for Top Movies and Load to GCS
-
-    @task
-    def concat_list(iterable_to_chain):
-        return list(chain.from_iterable(iterable_to_chain))
-
     @task_group
     def fetch_cast_for_movie(movie_id):
         api_path = 'movies_credits'
@@ -110,13 +88,22 @@ def tmdb_pipeline():
         return {'gcs_path': gcs_path, 'data': data}
 
     # Load the movies to GCS and return movie IDs and GCS URIS for downstream tasks
-    top_movies = ingest_top_movies_for_year.expand(year = extract_years_param())
-    
+    top_movies = ingest_and_load_top_movies_for_year.expand(year = extract_years_param())
+    movie_ids = helper_tasks.collect_xcom_for_expand(top_movies['movie_ids'])
+    # Get Xcom for downstream
+    # collected = helper_tasks.collect_dicts.expand(dicts_list = top_movies).reduce(flatten_keys = ['movie_ids'])
+    # gcs_paths = helper_tasks.extract_field(collected, 'gcs_path')
+    # movie_ids = helper_tasks.extract_field(collected, 'movie_ids')
+
+    # test = top_movies.reduce(my_test)
+
     # Load the raw data from Top movies to BigQuery
-    nothing1 = load_top_movies_to_bigquery(top_movies['gcs_path'])
+    # nothing1 = load_top_movies_to_bigquery.reduce(top_movies['gcs_path'])
+
 
     # Load cast data for the movies returned above
-    # nothing2 = fetch_cast_for_movie.expand(movie_id = concat_list(top_movies['movie_ids']))
+    # nothing2 = fetch_cast_for_movie.expand(movie_id = xcom_to_list(top_movies['movie_ids']))
+    nothing2 = fetch_cast_for_movie.expand(movie_id = movie_ids)
     return
     
 

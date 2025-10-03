@@ -3,7 +3,7 @@ from datetime import datetime
 def transform_record(json_data: dict, schema_config: list, gcs_path: str = None) -> dict:
     '''
     Build a row dict for BigQuery from JSON data based on schema_config.
-    - `source`: field name in JSON
+    - `json_path`: field name in JSON
     - `static`: fill with gcs_path
     - `generated`: supports 'now' for current timestamp
     '''
@@ -12,9 +12,9 @@ def transform_record(json_data: dict, schema_config: list, gcs_path: str = None)
     for col in schema_config:
         name = col['name']
 
-        if 'source' in col:
+        if 'json_path' in col:
             # Pull directly from JSON
-            value = json_data.get(col['source'])
+            value = json_data.get(col['json_path'])
             row[name] = value
 
         elif col.get('static'):
