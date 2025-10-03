@@ -24,6 +24,7 @@ def spotify_pipeline():
     api_path = 'artists'
 
     # Get the GCS Path to store the data
+    # TODO replace with get_gcs_path_for_task and delete get_storage_data task
     gcs_path = ingestion_tasks.get_storage_data(
         api = API,
         api_path = api_path,

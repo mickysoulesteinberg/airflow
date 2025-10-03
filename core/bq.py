@@ -1,5 +1,6 @@
 from google.cloud import bigquery
-import logging, os, textwrap
+import logging, os, textwrap, json
+from datetime import datetime, UTC
 
 # Environment variables
 PROJECT_ID = os.getenv('GCP_PROJECT_ID')
@@ -131,3 +132,27 @@ def format_stage_merge_query(staging_table, final_table, schema, merge_cols):
     '''
 
     return textwrap.dedent(query).strip()
+
+def bq_current_timestamp():
+    return datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')
+
+
+def transform_record(record, schema_config, context_values):
+    row = {}
+    for col in schema_config:
+        name = col['name']
+        json_path = col.get('json_path')
+        col_type = col.get('type')
+
+        if json_path:
+            value = record.get(json_path)
+        elif name in context_values:
+            value = context_values[name]
+        else:
+            value = None
+
+        if col_type == 'JSON' and value is not None:
+            value = json.dumps(value)
+
+        row[name] = value
+    return row
