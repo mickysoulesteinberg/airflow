@@ -28,7 +28,5 @@ CREDITS_SCHEMA = {
 
 TABLES = {
     'tmdb.discover_movies': MOVIES_SCHEMA,
-    'tmdb.discover_movies_stg': MOVIES_SCHEMA,
-    'tmdb.credits': CREDITS_SCHEMA,
-    'tmdb.credits_stg': CREDITS_SCHEMA
+    'tmdb.credits': CREDITS_SCHEMA
 }
