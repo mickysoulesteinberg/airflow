@@ -35,9 +35,9 @@ API_CONFIG = {
                 }
             },
             'call_params': {'year': kwargs['year']},
-            # 'return_data': {'movie_ids': 'results[].id'}
+            'return_data': {'movie_ids': 'results[].id'}
         },
-        'return_data': {'movie_ids': 'results[].id'}
+        # 'return_data': {'movie_ids': 'results[].id'}
     },
     'credits': {
         'api': 'tmdb',
@@ -78,7 +78,7 @@ def tmdb_pipeline():
         return api_args
     
     @task_group
-    def api_ingestion_iterate(api, api_path, staging_table, api_arg_builder, **kwargs):
+    def api_ingestion_iterate(api, api_path, staging_table, api_arg_builder, return_keys = None, **kwargs):
     
         # Task: Create dynamic API Fetch task arguments
         api_call_dict = build_api_call(api_arg_builder, **kwargs)
@@ -94,10 +94,10 @@ def tmdb_pipeline():
 
         # Load to staging table using staging_table
 
-        return fetched
+        return {key: fetched[key] for key in return_keys}
     
     @task_group
-    def api_ingestion(api_call, **kwargs):
+    def api_ingestion(api_call, return_keys = [], **kwargs):
         api_config = API_CONFIG[api_call]
         api = api_config['api']
         api_path = api_config['api_path']
@@ -112,31 +112,26 @@ def tmdb_pipeline():
         x_returned = api_ingestion_iterate.partial(
             api = api,
             api_path = api_path,
+            return_keys = return_keys,
             api_arg_builder = api_arg_builder,
             staging_table = staging_table
         ).expand(**kwargs)
 
-        returned_data = helper_tasks.reduce_xcoms(x_returned['movie_ids'])
+        returned_data = {}
+        for key in return_keys:
+            returned_data[key] = helper_tasks.reduce_xcoms.override(task_id = f'reduce_xcom_{key}')(x_returned[key])
+        # returned_data = helper_tasks.reduce_xcoms(x_returned)
 
         return returned_data
     
-    returned_data = api_ingestion.override(group_id = 'discover_movies')('discover_movies', year = YEARS)
+    top_movies = api_ingestion.override(group_id = 'discover_movies')('discover_movies', return_keys = ['movie_ids'], year = YEARS)
     
-    @task
-    def my_task(returned_data):
-        return returned_data
-    
-    returned_data2 = my_task(returned_data)
-
-    movie_ids = helper_tasks.reduce_xcoms.override(task_id = 'collect_movie_ids')(returned_data['movie_ids'])
-
-    api_ingestion.override(group_id = 'credits')('credits', movie_id = movie_ids)
+    api_ingestion.override(group_id = 'credits')('credits', movie_id = top_movies['movie_ids'])
     # api_ingestion.override(
     #     group_id = 'credits'
     # ).partial(
     #     api_call = 'credits'
     # ).expand(movie_id = movie_ids)
 
-    return returned_data2
 
 tmdb_pipeline()

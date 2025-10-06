@@ -29,8 +29,6 @@ def reduce_xcoms(xcom_values, reducer_func_name='flatten'):
 
     # Clean out None values
     xcom_values = [v for v in xcom_values if v is not None]
-    # TODO temporarily cutting the list for dev
-    xcom_values = xcom_values[:2]
 
     if reducer_func_name == 'flatten':
         flattened = []
@@ -42,6 +40,10 @@ def reduce_xcoms(xcom_values, reducer_func_name='flatten'):
             else:
                 flattened.append(v)
         logging.info(f"Flattened result: {flattened}")
+
+        # TODO temporarily cutting the list for dev
+        flattened = flattened[:2]
+
         return flattened
 
     elif reducer_func_name == 'sum':
