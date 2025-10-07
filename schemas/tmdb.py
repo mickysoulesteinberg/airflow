@@ -11,7 +11,8 @@ MOVIES_SCHEMA = {
         {'name': 'last_updated', 'type': 'TIMESTAMP', 'generated': 'now'} # auto timestamp
     ],
     'partition': {'type': 'DAY', 'field': 'last_updated'},
-    'clustering': ['id']
+    'clustering': ['id'],
+    'row_id': ['id']
 }
 
 CREDITS_SCHEMA = {
@@ -23,7 +24,8 @@ CREDITS_SCHEMA = {
         {'name': 'last_updated', 'type': 'TIMESTAMP', 'generated': 'now'}
     ],
     'partition': {'type': 'DAY', 'field': 'last_updated'},
-    'clustering': ['id']
+    'clustering': ['id'],
+    'row_id': ['id']
 }
 
 TABLES = {
