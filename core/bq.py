@@ -154,20 +154,23 @@ def create_table(
 
 def format_stage_merge_query(staging_table, final_table, schema, merge_cols):
     schema_cols = [col['name'] for col in schema]
-    on_clause = ' AND '.join([f'F.{col} = S.{col}' for col in merge_cols])
+
+    # Define clauses
+    on_clause = ' AND '.join([f'F.`{col}` = S.`{col}`' for col in merge_cols])
     update_clause = ',\n    '.join([
-        'last_updated = CURRENT_TIMESTAMP()' if col == 'last_updated'
-        else f'{col} = S.{col}'
+        'F.`last_updated` = CURRENT_TIMESTAMP()' if col == 'last_updated'
+        else f'F.`{col}` = S.`{col}`'
         for col in schema_cols
         if col not in merge_cols
     ])
-    insert_cols = ', '.join(schema_cols)
+    insert_cols = ', '.join([f'`{col}`' for col in schema_cols])
     values_clause = ', '.join([
         'CURRENT_TIMESTAMP()' if col == 'last_updated'
-        else f'S.{col}'
+        else f'S.`{col}`'
         for col in schema_cols
     ])
 
+    # Construct query
     query = f'''
     MERGE `{final_table}` F
     USING `{staging_table}` S
@@ -307,5 +310,6 @@ def bq_merge(schema, merge_cols, staging_table, final_table):
         schema=schema,
         merge_cols=merge_cols,
     )
+    logger.warning(f'''QUERY = {query}''')
     client.query(query).result()
     return

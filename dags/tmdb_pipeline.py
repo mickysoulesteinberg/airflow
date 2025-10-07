@@ -118,10 +118,6 @@ def tmdb_pipeline():
         result['done'] = updated_staging_table
         return result
     
-    @task
-    def wait_for_task_completion(*dummies):
-        return True
-    
     @task_group
     def api_ingestion(api_call, return_keys = [], **kwargs):
         api_config = API_CONFIG[api_call]
@@ -165,9 +161,6 @@ def tmdb_pipeline():
             returned_data[key] = helper_tasks.reduce_xcoms.override(
                 task_id = f'reduce_xcom_{key}'
             )(ingestion[key])
-        
-        # wait_for_ingestion = wait_for_task_completion(ingestion)
-        # wait_for_ingestion >> merge
 
         return returned_data
     
