@@ -19,18 +19,28 @@ def get_bq_client(project_id=PROJECT_ID):
     return bigquery.Client(project=project_id) if project_id else bigquery.Client()
 
 
-def insert_row_json(dataset_table, row, project_id=None):
+def insert_row_json(dataset, table, row, project_id=None):
     '''
     Insert a single row (dict) into BigQuery table.
     '''
     client = get_bq_client(project_id)
-    errors = client.insert_rows_json(dataset_table, [row])
+    table = f'{client.project}.{dataset}.{table}'
+    errors = client.insert_rows_json(table, [row])
 
     if errors:
         logger.error(f'BigQuery insert failed: {errors}')
         raise RuntimeError(f'BigQuery insert failed: {errors}')
-    logger.info(f'Inserted row into {dataset_table}')
+    logger.info(f'Inserted row into {table}')
     return row
+
+def insert_rows_json(dataset_table, rows, project_id = None):
+    client = get_bq_client(project_id)
+    errors = client.insert_rows_json(dataset_table, rows)
+    client.close()
+    if errors:
+        raise RuntimeError(errors)
+    logger.info(f'Inserted {len(rows)} rows into {dataset_table}')
+
 
 def make_bq_schema(schema_fields):
     '''
@@ -140,7 +150,7 @@ def create_table(
                 time.sleep(wait)
 
         raise RuntimeError(f"Table {dataset_table} not found after {retries} retries")
-    return
+    return dataset_table
 
 def format_stage_merge_query(staging_table, final_table, schema, merge_cols):
     schema_cols = [col['name'] for col in schema]
@@ -222,15 +232,72 @@ def transform_and_insert(schema_config, dataset_table, gcs_path, project_id=None
     else:
         rows = [transform_record(json_data, schema_config, context_values)]
 
-
+    dataset, table = dataset_table.split('.')
     # Insert all rows
     results = []
     for row in rows:
-        result = insert_row_json(dataset_table, row, project_id)
+        result = insert_row_json(dataset, table, row, project_id)
         results.append(result)
 
     return results
 
+def transform_and_insert_json(schema_config, dataset_table, gcs_path, project_id = None, json_root = None):
+    json_data = load_json_from_gcs(gcs_path, project_id)
+
+    # Define context values to use for static/generated columns
+    context_values = {
+        'gcs_uri': gcs_path,
+        'last_updated': bq_current_timestamp()
+    }
+
+    # Drill down if json_root is provided
+    if json_root:
+        for key in json_root:
+            if isinstance(json_data, dict) and key in json_data:
+                json_data = json_data[key]
+            else:
+                raise KeyError(f"json_root step '{key}' not found in JSON at {gcs_path}")
+
+    # At this point, json_data could be a dict (single record) or list (multiple records)
+    if isinstance(json_data, list):
+        rows = [transform_record(record, schema_config, context_values) for record in json_data]
+    else:
+        rows = [transform_record(json_data, schema_config, context_values)]
+
+    # Insert all rows
+    results = insert_rows_json(dataset_table, rows, project_id)
+
+    return results
+
+def transform_and_insert_json2(schema_config, dataset_table, gcs_path, project_id = None, json_root = None):
+    json_data = load_json_from_gcs(gcs_path, project_id)
+
+    # Define context values to use for static/generated columns
+    context_values = {
+        'gcs_uri': gcs_path,
+        'last_updated': bq_current_timestamp()
+    }
+
+    # Drill down if json_root is provided
+    if json_root:
+        for key in json_root:
+            if isinstance(json_data, dict) and key in json_data:
+                json_data = json_data[key]
+            else:
+                raise KeyError(f"json_root step '{key}' not found in JSON at {gcs_path}")
+
+    # At this point, json_data could be a dict (single record) or list (multiple records)
+    if isinstance(json_data, list):
+        rows = [transform_record(record, schema_config, context_values) for record in json_data]
+    else:
+        rows = [transform_record(json_data, schema_config, context_values)]
+    
+    # load to BQ
+    client = get_bq_client(project_id)
+    job = client.load_table_from_json(rows, dataset_table)
+    client.close()
+
+    return job.result()
 
 def bq_merge(schema, merge_cols, staging_table, final_table):
     client = get_bq_client()
