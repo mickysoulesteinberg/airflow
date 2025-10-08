@@ -1,8 +1,8 @@
 from google.cloud import bigquery
-import logging, os, textwrap, json, time
-from datetime import datetime, UTC
+import logging, os, textwrap, time
 from google.api_core.exceptions import NotFound
-from core.gcs import load_json_from_gcs
+from core.gcs import load_json_from_gcs, bq_current_timestamp, transform_record
+# from core.transform import transform_record
 
 # Environment variables
 PROJECT_ID = os.getenv('GCP_PROJECT_ID')
@@ -42,18 +42,18 @@ def insert_rows_json(dataset_table, rows, project_id = None):
     logger.info(f'Inserted {len(rows)} rows into {dataset_table}')
 
 
-def make_bq_schema(schema_fields):
-    '''
-    Convert list of dicts into list of BigQuery SchemaField objects.
-    '''
-    return [
-        bigquery.SchemaField(
-            name=f['name'],
-            field_type=f['type'],
-            mode=f.get('mode', 'NULLABLE'),
-        )
-        for f in schema_fields
-    ]
+# def make_bq_schema(schema_fields):
+#     '''
+#     Convert list of dicts into list of BigQuery SchemaField objects.
+#     '''
+#     return [
+#         bigquery.SchemaField(
+#             name=f['name'],
+#             field_type=f['type'],
+#             mode=f.get('mode', 'NULLABLE'),
+#         )
+#         for f in schema_fields
+#     ]
 
 def create_dataset_if_not_exists(dataset_id, client = None, project_id = None):
     project_id = project_id or PROJECT_ID
@@ -70,18 +70,18 @@ def create_dataset_if_not_exists(dataset_id, client = None, project_id = None):
 
 
 
-def create_table(dataset_table, schema, project_id, retries=5, wait=1):
-    client = bigquery.Client(project=project_id)
+# def create_table(dataset_table, schema, project_id, retries=5, wait=1):
+#     client = bigquery.Client(project=project_id)
 
-    # Wait until it’s really available
-    for _ in range(retries):
-        try:
-            client.get_table(table_id)
-            return table_id   # return the string so downstream can use it
-        except NotFound:
-            time.sleep(wait)
+#     # Wait until it’s really available
+#     for _ in range(retries):
+#         try:
+#             client.get_table(table_id)
+#             return table_id   # return the string so downstream can use it
+#         except NotFound:
+#             time.sleep(wait)
 
-    raise RuntimeError(f"Table {table_id} not found after {retries} retries")
+#     raise RuntimeError(f"Table {table_id} not found after {retries} retries")
 
 
 def create_table(
@@ -183,96 +183,14 @@ def format_stage_merge_query(staging_table, final_table, schema, merge_cols):
 
     return textwrap.dedent(query).strip()
 
-def bq_current_timestamp():
-    return datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')
 
 
-def transform_record(record, schema_config, context_values):
-    row = {}
-    for col in schema_config:
-        name = col['name']
-        json_path = col.get('json_path')
-        col_type = col.get('type')
-
-        if json_path:
-            value = record.get(json_path)
-        elif name in context_values:
-            value = context_values[name]
-        else:
-            value = None
-
-        if col_type == 'JSON' and value is not None:
-            value = json.dumps(value)
-
-        row[name] = value
-    return row
 
 
-def transform_and_insert(schema_config, dataset_table, gcs_path, project_id=None, json_root=None):
-    '''
-    Fetch JSON from GCS, optionally unwrap with json_root, transform into schema-aligned rows, 
-    and insert into BigQuery.
-    '''
-    json_data = load_json_from_gcs(gcs_path, project_id)
 
-    # Define context values to use for static/generated columns
-    context_values = {
-        'gcs_uri': gcs_path,
-        'last_updated': bq_current_timestamp()
-    }
 
-    # Drill down if json_root is provided
-    if json_root:
-        for key in json_root:
-            if isinstance(json_data, dict) and key in json_data:
-                json_data = json_data[key]
-            else:
-                raise KeyError(f"json_root step '{key}' not found in JSON at {gcs_path}")
-
-    # At this point, json_data could be a dict (single record) or list (multiple records)
-    if isinstance(json_data, list):
-        rows = [transform_record(record, schema_config, context_values) for record in json_data]
-    else:
-        rows = [transform_record(json_data, schema_config, context_values)]
-
-    dataset, table = dataset_table.split('.')
-    # Insert all rows
-    results = []
-    for row in rows:
-        result = insert_row_json(dataset, table, row, project_id)
-        results.append(result)
-
-    return results
 
 def transform_and_insert_json(schema_config, dataset_table, gcs_path, project_id = None, json_root = None):
-    json_data = load_json_from_gcs(gcs_path, project_id)
-
-    # Define context values to use for static/generated columns
-    context_values = {
-        'gcs_uri': gcs_path,
-        'last_updated': bq_current_timestamp()
-    }
-
-    # Drill down if json_root is provided
-    if json_root:
-        for key in json_root:
-            if isinstance(json_data, dict) and key in json_data:
-                json_data = json_data[key]
-            else:
-                raise KeyError(f"json_root step '{key}' not found in JSON at {gcs_path}")
-
-    # At this point, json_data could be a dict (single record) or list (multiple records)
-    if isinstance(json_data, list):
-        rows = [transform_record(record, schema_config, context_values) for record in json_data]
-    else:
-        rows = [transform_record(json_data, schema_config, context_values)]
-
-    # Insert all rows
-    results = insert_rows_json(dataset_table, rows, project_id)
-
-    return results
-
-def transform_and_insert_json2(schema_config, dataset_table, gcs_path, project_id = None, json_root = None):
     json_data = load_json_from_gcs(gcs_path, project_id)
 
     # Define context values to use for static/generated columns
@@ -312,4 +230,21 @@ def bq_merge(schema, merge_cols, staging_table, final_table):
     )
     logger.warning(f'''QUERY = {query}''')
     client.query(query).result()
+    client.close()
     return
+
+def load_all_gcs_to_bq(gcs_uris, dataset_table):
+    client = get_bq_client()
+    job = client.load_table_from_uri(
+        gcs_uris,
+        dataset_table,
+        job_config = bigquery.LoadJobConfig(
+            source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
+            write_disposition = 'WRITE_APPEND'
+        )
+    )
+    job.result()
+    client.close()
+    return
+
+

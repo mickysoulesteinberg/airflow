@@ -6,7 +6,8 @@ import tasks.loaders as loader_tasks
 import tasks.transforms as transform_tasks
 import tasks.helpers as helper_tasks
 import logging, time
-from core.bq import create_table
+from core.bq import create_table, load_all_gcs_to_bq
+from core.gcs import gcs_transform_and_store, delete_gcs_files
 from utils.helpers import get_valid_kwargs
 from schemas.tmdb import MOVIES_SCHEMA, CREDITS_SCHEMA
 
@@ -75,19 +76,29 @@ def tmdb_pipeline():
         time.sleep(3)
         return staging_table
 
-
-
+    @task(multiple_outputs = True)
+    def gcs_initial_transform(schema_config, gcs_path, json_root = None):
+        tmp_gcs = gcs_transform_and_store(schema_config, gcs_path, json_root = json_root)
+        return {'gcs_path': tmp_gcs['tmp_path'], 'gcs_uri': tmp_gcs['tmp_uri']}
     
     @task
     def build_api_call(api_arg_builder, **kwargs):
         api_args = api_arg_builder(**kwargs)
         return api_args
     
+    @task
+    def gcs_to_stg(gcs_uris, dataset_table):
+        return load_all_gcs_to_bq(gcs_uris, dataset_table)
+    
+    @task
+    def cleanup_temp_files(gcs_paths):
+        delete_gcs_files(gcs_paths)
+        return
+
     @task_group
     def api_ingestion_iterate(
         api,
         api_path,
-        staging_table,
         schema_config,
         json_root,
         api_arg_builder = None,
@@ -107,15 +118,15 @@ def tmdb_pipeline():
             api_call_dict = api_call_dict
         )
 
-        updated_staging_table = transform_tasks.gcs_to_bq_stg(
-            schema_config = schema_config,
-            dataset_table = staging_table,
-            gcs_path = fetched['gcs_path'],
-            json_root = json_root
+        transformed = gcs_initial_transform(
+            schema_config,
+            fetched['gcs_path'],
+            json_root
         )
 
         result = {key: fetched[key] for key in return_keys}
-        result['done'] = updated_staging_table
+        result['gcs_uri'] = transformed['gcs_uri']
+        result['gcs_path'] = transformed['gcs_path']
         return result
     
     @task_group
@@ -147,6 +158,15 @@ def tmdb_pipeline():
             json_root = json_root
         ).expand(**kwargs)
 
+
+
+        gcs_uris = helper_tasks.reduce_xcoms.override(
+            task_id = 'reduce_xcom_gcs_uri'
+        )(ingestion['gcs_uri'])
+
+
+        stage = gcs_to_stg(gcs_uris, staging_table)
+
         merge = loader_tasks.bq_stg_to_final_merge(
             staging_table = staging_table,
             final_table = final_table,
@@ -154,7 +174,14 @@ def tmdb_pipeline():
             merge_cols = merge_cols
         )
 
-        ingestion['done'] >> merge
+        gcs_paths = helper_tasks.reduce_xcoms.override(
+            task_id = 'reduce_xcom_gcs_path'
+        )(ingestion['gcs_path'])
+
+        cleanup = cleanup_temp_files(gcs_paths)
+        # ingestion['done'] >> merge
+
+        stage >> merge >> cleanup
 
         returned_data = {}
         for key in return_keys:
@@ -172,7 +199,7 @@ def tmdb_pipeline():
         year = YEARS
     )['movie_ids']
     
-    api_ingestion.override(group_id = 'credits')('credits', movie_id = movie_ids)
+    # api_ingestion.override(group_id = 'credits')('credits', movie_id = movie_ids)
 
 
 

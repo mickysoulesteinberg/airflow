@@ -2,7 +2,7 @@ from airflow.decorators import task
 import logging, jmespath
 from core.api import api_get
 from core.gcs import upload_to_gcs
-from core.bq import create_table
+# from core.bq import create_table
 from airflow.operators.python import get_current_context
 from core.storage_utils import get_gcs_path
 
@@ -29,15 +29,7 @@ def get_storage_data(api, api_path, call_params=None):
     return gcs_path
 
 
-# @task
-# def create_staging_table(dataset_table, schema_config):
-#     create_table(dataset_table, schema_config = schema_config, force_recreate = True)
-#     return dataset_table
 
-
-from airflow.decorators import task
-from airflow.operators.python import get_current_context
-import jmespath
 
 @task(multiple_outputs=True)
 def api_fetch(api=None, api_path=None, api_args=None, gcs_path=None,
