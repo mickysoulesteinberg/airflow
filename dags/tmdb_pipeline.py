@@ -6,7 +6,7 @@ import tasks.loaders as loader_tasks
 import tasks.helpers as helper_tasks
 import logging, time, json
 from core.bq import create_table, load_all_gcs_to_bq
-from core.gcs import gcs_transform_and_store, delete_gcs_files
+from core.gcs import gcs_transform_and_store, delete_gcs_files, delete_gcs_folder
 from schemas.tmdb import MOVIES_SCHEMA, CREDITS_SCHEMA
 from dag_helpers.paths import make_gcs_path_factory
 
@@ -86,10 +86,10 @@ def tmdb_pipeline():
         tmp_gcs = gcs_transform_and_store(schema_config, gcs_path, json_root = json_root)
         return {'gcs_path': tmp_gcs['tmp_path'], 'gcs_uri': tmp_gcs['tmp_uri']}
     
-    @task
-    def build_api_call(api_arg_builder, **kwargs):
-        api_call_dict = api_arg_builder(**kwargs)
-        return api_call_dict
+    # @task
+    # def build_api_call(api_arg_builder, **kwargs):
+    #     api_call_dict = api_arg_builder(**kwargs)
+    #     return api_call_dict
     
     @task(multiple_outputs = True)
     def setup_api_call(api_arg_builder, gcs_prefix, **kwargs):
@@ -117,7 +117,8 @@ def tmdb_pipeline():
         api_path,
         schema_config,
         json_root,
-        gcs_prefix,
+        # gcs_prefix,
+        gcs_folders,
         api_arg_builder = None,
         return_keys = None,
         **api_kwargs):
@@ -133,6 +134,8 @@ def tmdb_pipeline():
 
         # # TODO Handle case where inputs are None
         # gcs_path = f'{gcs_prefix}/{make_gcs_file_name(api_call_dict['call_id'])}'
+
+        gcs_prefix = gcs_folders['gcs_prefix']
 
         task_builder = setup_api_call(api_arg_builder, gcs_prefix, **api_kwargs)
         api_args = task_builder['api_args']
@@ -165,36 +168,18 @@ def tmdb_pipeline():
     
 
     @task(multiple_outputs = True)
-    def access_api_call_params(api_call):
-        context = get_current_context()
-
-        api_config = API_CONFIG1[api_call]
-
-        make_gcs_prefix, make_gcs_file_name = make_gcs_path_factory(context)
-        api = api_config['api']
-        api_path = api_config['api_path']
-        gcs_prefix = make_gcs_prefix(api, api_path)
-
-        return {
-            'api': api,
-            'api_path': api_path,
-            'schema_config': api_config['schema']['schema'],
-            'merge_cols': api_config['schema']['row_id'],
-            'staging_dataset_table': api_config['staging_table'],
-            'final_table': api_config['final_table'],
-            'api_arg_builder': api_config['api_arg_builder'],
-            'json_root': api_config['json_root'],
-            'gcs_prefix': gcs_prefix,
-            'make_gcs_file_name': make_gcs_file_name
-        }
-
-    @task
-    def create_gcs_folder_path(api, api_path):
+    def create_gcs_folder_paths(api, api_path):
         context = get_current_context()
 
         make_gcs_prefix, _ = make_gcs_path_factory(context)
         gcs_prefix = make_gcs_prefix(api, api_path)
-        return gcs_prefix
+        gcs_tmp_prefix = f'{gcs_prefix}/tmp'
+        return {'gcs_prefix': gcs_prefix, 'gcs_tmp_prefix': gcs_tmp_prefix}
+    
+    @task
+    def delete_gcs_tmp_folder(tmp_folder_path):
+        delete_gcs_folder(tmp_folder_path)
+        return
 
     @task_group
     def api_ingestion(api_call, return_keys = [], **kwargs):
@@ -203,10 +188,7 @@ def tmdb_pipeline():
         api = api_config['api']
         api_path = api_config['api_path']
 
-        gcs_prefix = create_gcs_folder_path(api, api_path)
-        # make_gcs_file_name = gcs_path_data['make_gcs_file_name']
-        # Task: Get Params
-        # task_group_params = access_api_call_params(api_call)
+        gcs_folders = create_gcs_folder_paths(api, api_path)
 
         bq_schema_config = api_config['schema']['schema']
 
@@ -225,7 +207,7 @@ def tmdb_pipeline():
             api_arg_builder = api_config['api_arg_builder'],
             staging_table = staging_table,
             json_root = api_config['json_root'],
-            gcs_prefix = gcs_prefix
+            gcs_folders = gcs_folders
             # make_gcs_file_name = make_gcs_file_name
         ).expand(**kwargs)
 
@@ -245,12 +227,14 @@ def tmdb_pipeline():
             merge_cols = api_config['schema']['row_id']
         )
 
-        gcs_paths = helper_tasks.reduce_xcoms.override(
-            task_id = 'reduce_xcom_gcs_path'
-        )(ingestion['gcs_path'])
+        # gcs_paths = helper_tasks.reduce_xcoms.override(
+        #     task_id = 'reduce_xcom_gcs_path'
+        # )(ingestion['gcs_path'])
 
-        cleanup = cleanup_temp_files(gcs_paths)
+        # cleanup = cleanup_temp_files(gcs_paths)
+        cleanup = delete_gcs_tmp_folder(gcs_folders['gcs_tmp_prefix'])
         # ingestion['done'] >> merge
+
 
         stage >> merge >> cleanup
 

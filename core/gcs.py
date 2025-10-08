@@ -49,7 +49,10 @@ def load_json_from_gcs(path, project_id=None):
     data = blob.download_as_text()
     return json.loads(data)
 
-def gcs_transform_and_store(schema_config, path, tmp_dir='tmp', json_root = None, project_id = None):
+def gcs_transform_and_store(schema_config, path,
+                            tmp_dir = None,
+                            tmp_file_name = None,
+                            json_root = None, project_id = None):
     """
     Reads JSON from GCS, applies transform, writes transformed JSON to a temp GCS location.
     Returns the new GCS URI for downstream bulk load.
@@ -62,8 +65,9 @@ def gcs_transform_and_store(schema_config, path, tmp_dir='tmp', json_root = None
     # Write to new GCS temp location
     bucket_name = BUCKET
     folder_path = '/'.join(path.split('/')[:-1])
-    file_name = os.path.basename(path).replace('.json', '_transformed.json')
-    tmp_blob_path = f'{folder_path}/{tmp_dir}/{file_name}'
+    tmp_folder_path = tmp_dir or f'{folder_path}/tmp'
+    tmp_file_name = tmp_file_name or os.path.basename(path).replace('.json', '_transformed.json')
+    tmp_blob_path = f'{tmp_folder_path}/{tmp_file_name}'
     tmp_uri = f'gs://{bucket_name}/{tmp_blob_path}'
 
     client = get_gcs_client(project_id = project_id)
