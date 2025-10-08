@@ -86,11 +86,6 @@ def tmdb_pipeline():
         tmp_gcs = gcs_transform_and_store(schema_config, gcs_path, json_root = json_root)
         return {'gcs_path': tmp_gcs['tmp_path'], 'gcs_uri': tmp_gcs['tmp_uri']}
     
-    # @task
-    # def build_api_call(api_arg_builder, **kwargs):
-    #     api_call_dict = api_arg_builder(**kwargs)
-    #     return api_call_dict
-    
     @task(multiple_outputs = True)
     def setup_api_call(api_arg_builder, gcs_prefix, **kwargs):
         api_call_dict = api_arg_builder(**kwargs)
@@ -98,7 +93,7 @@ def tmdb_pipeline():
         _, make_gcs_file_name = make_gcs_path_factory(context)
         gcs_path = f'{gcs_prefix}/{make_gcs_file_name(api_call_dict['call_id'])}'
         api_args = api_call_dict['api_args']
-        return_data = api_call_dict['return_data']
+        return_data = api_call_dict.get('return_data')
         return {'gcs_path': gcs_path, 'api_args': api_args, 'return_data': return_data}
 
     
@@ -117,23 +112,11 @@ def tmdb_pipeline():
         api_path,
         schema_config,
         json_root,
-        # gcs_prefix,
         gcs_folders,
         api_arg_builder = None,
         return_keys = None,
         **api_kwargs):
     
-        # api_call_dict = None
-        # gcs_path = None
-        # gcs_file_name = None
-
-        # # TODO merge this task and below
-        # # Task: Create dynamic API Fetch task arguments
-        # if api_arg_builder:
-        #     api_call_dict = build_api_call(api_arg_builder, **api_kwargs)
-
-        # # TODO Handle case where inputs are None
-        # gcs_path = f'{gcs_prefix}/{make_gcs_file_name(api_call_dict['call_id'])}'
 
         gcs_prefix = gcs_folders['gcs_prefix']
 
@@ -141,14 +124,6 @@ def tmdb_pipeline():
         api_args = task_builder['api_args']
         gcs_path = task_builder['gcs_path']
         return_data = task_builder['return_data']
-
-        # Task: Fetch the data and load to gcs (returns GCS path and any requested data)
-        # fetched = ingestion_tasks.api_fetch(
-        #     api = api,
-        #     api_path = api_path,
-        #     gcs_path = gcs_path,
-        #     api_call_dict = api_call_dict
-        # )
 
         fetched = ingestion_tasks.api_fetch_and_load(
             api=api, api_path = api_path, api_args = api_args, gcs_path = gcs_path,
@@ -208,7 +183,6 @@ def tmdb_pipeline():
             staging_table = staging_table,
             json_root = api_config['json_root'],
             gcs_folders = gcs_folders
-            # make_gcs_file_name = make_gcs_file_name
         ).expand(**kwargs)
 
 
@@ -227,14 +201,7 @@ def tmdb_pipeline():
             merge_cols = api_config['schema']['row_id']
         )
 
-        # gcs_paths = helper_tasks.reduce_xcoms.override(
-        #     task_id = 'reduce_xcom_gcs_path'
-        # )(ingestion['gcs_path'])
-
-        # cleanup = cleanup_temp_files(gcs_paths)
         cleanup = delete_gcs_tmp_folder(gcs_folders['gcs_tmp_prefix'])
-        # ingestion['done'] >> merge
-
 
         stage >> merge >> cleanup
 
@@ -254,7 +221,7 @@ def tmdb_pipeline():
         year = YEARS
     )['movie_ids']
     
-    # api_ingestion.override(group_id = 'credits')('credits', movie_id = movie_ids)
+    api_ingestion.override(group_id = 'credits')('credits', movie_id = movie_ids)
 
 
 

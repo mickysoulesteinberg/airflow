@@ -80,10 +80,6 @@ def gcs_transform_and_store(schema_config, path,
     client.close()
 
     return {
-        # 'original_path': path,
-        # 'bucket_name': bucket_name,
-        # 'folder_path': folder_path,
-        # 'file_name': file_name,
         'tmp_path': tmp_blob_path,
         'tmp_uri': tmp_uri
     }
