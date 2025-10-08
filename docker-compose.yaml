@@ -37,6 +37,7 @@ x-airflow-common: &airflow-common
     - ${AIRFLOW_PROJ_DIR:-.}/keys:/opt/airflow/keys
     # --Extra code repos
     - ${AIRFLOW_PROJ_DIR:-.}/apis:/opt/airflow/apis
+    - ${AIRFLOW_PROJ_DIR:-.}/dag_helpers:/opt/airflow/dag_helpers
     - ${AIRFLOW_PROJ_DIR:-.}/tasks:/opt/airflow/tasks
     - ${AIRFLOW_PROJ_DIR:-.}/core:/opt/airflow/core
     - ${AIRFLOW_PROJ_DIR:-.}/schemas:/opt/airflow/schemas

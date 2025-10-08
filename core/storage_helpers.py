@@ -1,5 +1,3 @@
-from airflow.operators.python import get_current_context
-
 def compute_storage_metadata(
         api,
         api_path,
@@ -23,6 +21,17 @@ def compute_storage_metadata(
     bq_final_table   = f'{dataset}.{base_table}'
 
     return {'gcs_path': gcs_path, 'bq_staging_table': bq_staging_table, 'bq_final_table': bq_final_table}
+
+def get_gcs_prefix(api, api_path, top_folder = 'not-a-dag'):
+    return f'{top_folder}/{api}/{api_path}'
+
+def get_gcs_file_name(run_suffix = 'data', call_params = None):
+    file_name = f'{run_suffix}.json'
+    if call_params:
+        call_id = '-'.join(f'{k}{v}' for k, v in call_params.items())
+        file_name = f'{call_id}-{file_name}'
+    return file_name
+
 
 # Helper function to use within a task to get storage path for api data
 def get_gcs_path(top_folder, api, api_path, call_params = None, run_suffix = None):

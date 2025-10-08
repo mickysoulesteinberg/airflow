@@ -93,9 +93,21 @@ def delete_gcs_files(paths):
         blob = bucket.blob(path)
         blob.delete()
     client.close()
+    return
 
-
-
+def delete_gcs_folder(folder_path):
+    '''Deletes all blobs under a GCS folder path'''
+    bucket_name = BUCKET
+    client = get_gcs_client()
+    bucket = client.bucket(bucket_name)
+    blobs = bucket.list_blobs(prefix = folder_path)
+    deleted = 0
+    for blob in blobs:
+        blob.delete()
+        deleted += 1
+    client.close()
+    logger.info(f'Deleted {deleted} blobs from gs://{bucket_name}/{folder_path}')
+    return
 
 # Move below to core.transform
 
