@@ -3,15 +3,7 @@ import json, logging, os
 from utils.config import CONFIG
 from datetime import datetime, UTC
 from contextlib import contextmanager
-
-
-# CONFIG variables
-BUCKET = CONFIG.get('gcs_bucket')
-if not BUCKET:
-    raise ValueError('No gcs_bucket configured for current environment in settings.yaml')
-
-# Environment variables
-PROJECT_ID = os.getenv('GCS_PROJECT_ID')
+from core.env import resolve_project, resolve_bucket
 
 logger = logging.getLogger(__name__)
 
@@ -20,85 +12,102 @@ logger = logging.getLogger(__name__)
 # -------------------------------------------------
 
 # Always used to create the client
-def get_gcs_client(project_id = None):
+def get_gcs_client(project_id=None):
     '''
     Creates and returns a new GCS client.
     If project_id is None, defaults from environment/credentials
     '''
-    project_id = project_id or PROJECT_ID
+    project_id = resolve_project(project_id)
     logger.debug(f'Creating new client (project_id: {project_id})')
-    return storage.Client(project = project_id)
+    return storage.Client(project=project_id)
 
 # Explicitly manage client lifecycle
 @contextmanager
-def gcs_client_context(project_id = None):
+def gcs_client_context(project_id=None):
     '''
     Context manager that yields a GCS client and ensures it is closed.
     Usage:
         with gcs_client_context('my-project') as client:
             ...
     '''
-    client = get_gcs_client(project_id = project_id)
+    client = get_gcs_client(project_id=project_id)
     try:
         yield client
     finally:
         client.close()
 
 # Decorator wraps functions for Airflow
-def with_client(func):
+def with_bucket(func):
     '''
-    Wrapper to handle opening/closing GCS Client if one is not passed explicitly.
-    Internally uses the same gcs_client_context().
-    If project_id is not passed, this wrapper replaces it so it can be referenced
-        in the wrapped function
+    Decorator that injects a managed GCS client, project_id, and bucket.
+    Handles cases where:
+      - A full bucket object is passed (infers client + project)
+      - Only a bucket name is passed
+      - Neither is passed (falls back to env vars)
     '''
-    def wrapper(*args, client = None, project_id = None, **kwargs):
-        if client is not None:
-            # Client is provided, don't bother opening/closing it, but do populate project_id
-            return func(*args, client = client, project_id = client.project, **kwargs)
-        
-        # Otherwise, open a managed client context
+    def wrapper(*args, client=None, project_id=None, bucket=None, bucket_name=None, **kwargs):
+        logger.debug(f'with_bucket: client={"yes" if client else "no"}, bucket={"yes" if bucket else "no"}')
+
+        # If bucket is passed, populate arguments with correct values
+        if bucket:
+            client = bucket.client
+            return func(*args, client=client, project_id=client.project,
+                        bucket=bucket, bucket_name=bucket.name, **kwargs)
+
+        # Otherwise, if client is passed, create the bucket and populate other arguments
+        if client:
+            bucket_name = resolve_bucket(bucket_name)
+            bucket = client.bucket(bucket_name)
+            return func(*args, client=client, project_id = client.project,
+                        bucket=bucket, bucket_name=bucket_name, **kwargs)
+
+        # Otherwise, manage client lifecycle and create bucket
         with gcs_client_context(project_id) as managed_client:
-            return func(*args, client = managed_client, project_id = managed_client.project, **kwargs)
+            bucket_name = resolve_bucket(bucket_name)
+            bucket = managed_client.bucket(bucket_name)
+            return func(*args, client=managed_client, project_id=managed_client.project,
+                        bucket=bucket, bucket_name=bucket_name, **kwargs)
+
     return wrapper
 
 
 # -------------------------------------------------
 # Uploading
 # -------------------------------------------------
-@with_client
-def upload_to_gcs(path, data, wrap = True, client = None, project_id = None):
+@with_bucket
+def upload_to_gcs(path, data, wrap=True, client=None, project_id=None, bucket=None, bucket_name=None):
 
     # Get URI and prep data
-    bucket_name = BUCKET
     uri = f'gs://{bucket_name}/{path}'
     if wrap:
         data = {'uri': uri, 'data': data}
 
     # Uploads data to gcs and returns the uri
-    bucket = client.bucket(bucket_name)
     blob = bucket.blob(path)
-    blob.upload_from_string(json.dumps(data), content_type = 'application/json')
+    blob.upload_from_string(json.dumps(data), content_type='application/json')
 
     logger.info(f'[GCS] Wrote file: {uri}')
 
     return uri
 
 
-def load_json_from_gcs(path, project_id=None):
+# -------------------------------------------------
+# Reading
+# -------------------------------------------------
+@with_bucket
+def load_json_from_gcs(path, client=None, project_id=None, bucket=None, bucket_name=None):
     '''Helper: read JSON from a GCS path like 'bucket/folder/file.json'.'''
-    client = get_gcs_client(project_id = project_id)
-    bucket = client.bucket(BUCKET)
     blob = bucket.blob(path)
     data = blob.download_as_text()
     return json.loads(data)
 
 
-
+@with_bucket
 def gcs_transform_and_store(schema_config, path,
-                            tmp_dir = None,
-                            tmp_file_name = None,
-                            json_root = None, project_id = None):
+                            tmp_dir=None, tmp_file_name=None,
+                            json_root=None, 
+                            client=None, project_id=None,
+                            bucket=None, bucket_name=None):
     """
     Reads JSON from GCS, applies transform, writes transformed JSON to a temp GCS location.
     Returns the new GCS URI for downstream bulk load.
@@ -106,24 +115,20 @@ def gcs_transform_and_store(schema_config, path,
     # TODO check that path goes to a json file
 
     # Tranform the raw json to BigQuery-ready format
-    transformed_records = transform_json_records(schema_config, path, json_root = json_root, project_id = project_id)
+    transformed_records = transform_json_records(schema_config, path, json_root=json_root, project_id=project_id)
 
     # Write to new GCS temp location
-    bucket_name = BUCKET
     folder_path = '/'.join(path.split('/')[:-1])
     tmp_folder_path = tmp_dir or f'{folder_path}/tmp'
     tmp_file_name = tmp_file_name or os.path.basename(path).replace('.json', '_transformed.json')
     tmp_blob_path = f'{tmp_folder_path}/{tmp_file_name}'
     tmp_uri = f'gs://{bucket_name}/{tmp_blob_path}'
 
-    client = get_gcs_client(project_id = project_id)
-    bucket = client.bucket(bucket_name)
     blob = bucket.blob(tmp_blob_path)
     blob.upload_from_string(
         '\n'.join(json.dumps(r) for r in transformed_records),
         content_type='application/json',
     )
-    client.close()
 
     return {
         'tmp_path': tmp_blob_path,
@@ -131,34 +136,28 @@ def gcs_transform_and_store(schema_config, path,
     }
 
 
-
-def delete_gcs_files(paths):
-    client = get_gcs_client()
-    bucket = client.bucket(BUCKET)
+@with_bucket
+def delete_gcs_files(paths, client=None, project_id=None, bucket=None, bucket_name=None):
     for path in paths:
         blob = bucket.blob(path)
         blob.delete()
-    client.close()
     return
 
-def delete_gcs_folder(folder_path):
+@with_bucket
+def delete_gcs_folder(folder_path, client=None, project_id=None, bucket=None, bucket_name=None):
     '''Deletes all blobs under a GCS folder path'''
-    bucket_name = BUCKET
-    client = get_gcs_client()
-    bucket = client.bucket(bucket_name)
-    blobs = bucket.list_blobs(prefix = folder_path)
+    blobs = bucket.list_blobs(prefix=folder_path)
     deleted = 0
     for blob in blobs:
         blob.delete()
         deleted += 1
-    client.close()
     logger.info(f'Deleted {deleted} blobs from gs://{bucket_name}/{folder_path}')
     return
 
 # Move below to core.transform
 
-def transform_json_records(schema_config, gcs_path, project_id = None, json_root = None):
-    json_data = load_json_from_gcs(gcs_path, project_id)
+def transform_json_records(schema_config, gcs_path, project_id=None, json_root=None):
+    json_data = load_json_from_gcs(gcs_path, project_id=project_id)
 
     # Define context values to use for static/generated columns
     context_values = {

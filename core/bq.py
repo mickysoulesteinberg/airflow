@@ -2,9 +2,7 @@ from google.cloud import bigquery
 import logging, os, textwrap, time
 from google.api_core.exceptions import NotFound
 from contextlib import contextmanager
-
-# Environment variables
-PROJECT_ID = os.getenv('GCP_PROJECT_ID')
+from core.env import resolve_project
 
 logger = logging.getLogger(__name__)
 
@@ -18,9 +16,9 @@ def get_bq_client(project_id = None):
     Creates and returns a new BigQuery client.
     If project_id is None, defaults from environment/credentials.
     '''
-    project_id = project_id or PROJECT_ID
+    project_id = resolve_project(project_id)
     logger.debug(f'Creating BigQuery client (project_id: {project_id})')
-    return bigquery.Client(project=project_id)
+    return bigquery.Client(project = project_id)
 
 
 # Explicitly manage client lifecycle
