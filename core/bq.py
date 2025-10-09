@@ -2,8 +2,6 @@ from google.cloud import bigquery
 import logging, os, textwrap, time
 from google.api_core.exceptions import NotFound
 from contextlib import contextmanager
-from core.gcs import load_json_from_gcs, bq_current_timestamp, transform_record
-# from core.transform import transform_record
 
 # Environment variables
 PROJECT_ID = os.getenv('GCP_PROJECT_ID')
@@ -21,7 +19,7 @@ def get_bq_client(project_id = None):
     If project_id is None, defaults from environment/credentials.
     '''
     project_id = project_id or PROJECT_ID
-    logger.debug(f'Creating BigQuery client (project_id={project_id})')
+    logger.debug(f'Creating BigQuery client (project_id: {project_id})')
     return bigquery.Client(project=project_id)
 
 
@@ -46,15 +44,17 @@ def with_client(func):
     '''
     Wrapper to handle opening/closing a BigQuery Client if one is not passed explicitly. 
     Internally uses the same bq_client_context().
+    If project_id is not passed, this wrapper replaces it so it can be referenced
+        in the wrapped function
     '''
     def wrapper(*args, client = None, project_id = None, **kwargs):
         if client is not None:
-            # Client is provided, don't bother opening/closing it
-            return func(*args, client = client, project_id = project_id, **kwargs)
+            # Client is provided, don't bother opening/closing it, but do populate project_id
+            return func(*args, client = client, project_id = client.project, **kwargs)
         
         # Otherwise, open a managed client context
         with bq_client_context(project_id) as managed_client:
-            return func(*args, client = managed_client, project_id = project_id, **kwargs)
+            return func(*args, client = managed_client, project_id = managed_client.project, **kwargs)
     return wrapper
 
 
@@ -64,7 +64,6 @@ def with_client(func):
 
 @with_client
 def create_dataset_if_not_exists(dataset_id, client = None, project_id = None):
-    project_id = project_id or client.project
     dataset_ref = bigquery.Dataset(f'{project_id}.{dataset_id}')
     try:
         client.create_dataset(dataset_ref)

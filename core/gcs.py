@@ -2,6 +2,7 @@ from google.cloud import storage
 import json, logging, os
 from utils.config import CONFIG
 from datetime import datetime, UTC
+from contextlib import contextmanager
 
 
 # CONFIG variables
@@ -14,14 +15,59 @@ PROJECT_ID = os.getenv('GCS_PROJECT_ID')
 
 logger = logging.getLogger(__name__)
 
-#  Small functions that mean nothing now but might be useful in the future
-def get_gcs_client(project_id = PROJECT_ID):
-    '''Creates and returns a new GCS client.'''
-    logger.debug('Creating new client')
-    return storage.Client(project_id = project_id) if project_id else storage.Client()
+# -------------------------------------------------
+# Manage Storage Client
+# -------------------------------------------------
+
+# Always used to create the client
+def get_gcs_client(project_id = None):
+    '''
+    Creates and returns a new GCS client.
+    If project_id is None, defaults from environment/credentials
+    '''
+    project_id = project_id or PROJECT_ID
+    logger.debug(f'Creating new client (project_id: {project_id})')
+    return storage.Client(project = project_id)
+
+# Explicitly manage client lifecycle
+@contextmanager
+def gcs_client_context(project_id = None):
+    '''
+    Context manager that yields a GCS client and ensures it is closed.
+    Usage:
+        with gcs_client_context('my-project') as client:
+            ...
+    '''
+    client = get_gcs_client(project_id = project_id)
+    try:
+        yield client
+    finally:
+        client.close()
+
+# Decorator wraps functions for Airflow
+def with_client(func):
+    '''
+    Wrapper to handle opening/closing GCS Client if one is not passed explicitly.
+    Internally uses the same gcs_client_context().
+    If project_id is not passed, this wrapper replaces it so it can be referenced
+        in the wrapped function
+    '''
+    def wrapper(*args, client = None, project_id = None, **kwargs):
+        if client is not None:
+            # Client is provided, don't bother opening/closing it, but do populate project_id
+            return func(*args, client = client, project_id = client.project, **kwargs)
+        
+        # Otherwise, open a managed client context
+        with gcs_client_context(project_id) as managed_client:
+            return func(*args, client = managed_client, project_id = managed_client.project, **kwargs)
+    return wrapper
 
 
-def upload_to_gcs(path, data, wrap = True, project_id = None):
+# -------------------------------------------------
+# Uploading
+# -------------------------------------------------
+@with_client
+def upload_to_gcs(path, data, wrap = True, client = None, project_id = None):
 
     # Get URI and prep data
     bucket_name = BUCKET
@@ -30,13 +76,11 @@ def upload_to_gcs(path, data, wrap = True, project_id = None):
         data = {'uri': uri, 'data': data}
 
     # Uploads data to gcs and returns the uri
-    client = get_gcs_client(project_id = project_id)
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(path)
     blob.upload_from_string(json.dumps(data), content_type = 'application/json')
 
     logger.info(f'[GCS] Wrote file: {uri}')
-    client.close()
 
     return uri
 
@@ -48,6 +92,8 @@ def load_json_from_gcs(path, project_id=None):
     blob = bucket.blob(path)
     data = blob.download_as_text()
     return json.loads(data)
+
+
 
 def gcs_transform_and_store(schema_config, path,
                             tmp_dir = None,
