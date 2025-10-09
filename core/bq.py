@@ -1,6 +1,7 @@
 from google.cloud import bigquery
 import logging, os, textwrap, time
 from google.api_core.exceptions import NotFound
+from contextlib import contextmanager
 from core.gcs import load_json_from_gcs, bq_current_timestamp, transform_record
 # from core.transform import transform_record
 
@@ -9,79 +10,66 @@ PROJECT_ID = os.getenv('GCP_PROJECT_ID')
 
 logger = logging.getLogger(__name__)
 
-# Get a BQ Client
-def get_bq_client(project_id=PROJECT_ID):
+# -------------------------------------------------
+# Manage BigQuery Client
+# -------------------------------------------------
+
+# Always used to create the client
+def get_bq_client(project_id = None):
     '''
     Creates and returns a new BigQuery client.
     If project_id is None, defaults from environment/credentials.
     '''
-    logger.debug(f'Creating BigQuery client (project_id={project_id})')
-    return bigquery.Client(project=project_id) if project_id else bigquery.Client()
-
-
-def insert_row_json(dataset, table, row, project_id=None):
-    '''
-    Insert a single row (dict) into BigQuery table.
-    '''
-    client = get_bq_client(project_id)
-    table = f'{client.project}.{dataset}.{table}'
-    errors = client.insert_rows_json(table, [row])
-
-    if errors:
-        logger.error(f'BigQuery insert failed: {errors}')
-        raise RuntimeError(f'BigQuery insert failed: {errors}')
-    logger.info(f'Inserted row into {table}')
-    return row
-
-def insert_rows_json(dataset_table, rows, project_id = None):
-    client = get_bq_client(project_id)
-    errors = client.insert_rows_json(dataset_table, rows)
-    client.close()
-    if errors:
-        raise RuntimeError(errors)
-    logger.info(f'Inserted {len(rows)} rows into {dataset_table}')
-
-
-# def make_bq_schema(schema_fields):
-#     '''
-#     Convert list of dicts into list of BigQuery SchemaField objects.
-#     '''
-#     return [
-#         bigquery.SchemaField(
-#             name=f['name'],
-#             field_type=f['type'],
-#             mode=f.get('mode', 'NULLABLE'),
-#         )
-#         for f in schema_fields
-#     ]
-
-def create_dataset_if_not_exists(dataset_id, client = None, project_id = None):
     project_id = project_id or PROJECT_ID
-    client = client or get_bq_client(project_id)
+    logger.debug(f'Creating BigQuery client (project_id={project_id})')
+    return bigquery.Client(project=project_id)
+
+
+# Explicitly manage client lifecycle
+@contextmanager
+def bq_client_context(project_id = None):
+    '''
+    Context manager that yields a BigQuery client and ensures it is closed.
+    Usage:
+        with bq_client_context('my-project') as client:
+            ...
+    '''
+    client = get_bq_client(project_id = project_id)
+    try:
+        yield client
+    finally:
+        client.close()
+
+
+# Decorator wraps functions for Airflow
+def with_client(func):
+    '''
+    Wrapper to handle opening/closing a BigQuery Client if one is not passed explicitly. 
+    Internally uses the same bq_client_context().
+    '''
+    def wrapper(*args, client = None, project_id = None, **kwargs):
+        if client is not None:
+            # Client is provided, don't bother opening/closing it
+            return func(*args, client = client, project_id = project_id, **kwargs)
+        
+        # Otherwise, open a managed client context
+        with bq_client_context(project_id) as managed_client:
+            return func(*args, client = managed_client, project_id = project_id, **kwargs)
+    return wrapper
+
+
+@with_client
+def create_dataset_if_not_exists(dataset_id, client = None, project_id = None):
+    project_id = project_id or client.project
     dataset_ref = bigquery.Dataset(f'{project_id}.{dataset_id}')
     try:
         client.create_dataset(dataset_ref)
-        logger.info(f'Created dataset {dataset_id}')
+        logger.info(f'Created dataset {dataset_id}.')
     except Exception as e:
         if 'Already Exists' in str(e):
-            logger.info(f'Dataset {dataset_id} exists')
+            logger.info(f'Dataset {dataset_id} already exists.')
         else:
             raise
-
-
-
-# def create_table(dataset_table, schema, project_id, retries=5, wait=1):
-#     client = bigquery.Client(project=project_id)
-
-#     # Wait until it’s really available
-#     for _ in range(retries):
-#         try:
-#             client.get_table(table_id)
-#             return table_id   # return the string so downstream can use it
-#         except NotFound:
-#             time.sleep(wait)
-
-#     raise RuntimeError(f"Table {table_id} not found after {retries} retries")
 
 
 def create_table(
@@ -99,7 +87,7 @@ def create_table(
         logger.warning('No schema provided. Please input table_config or schema_config')
         return
 
-    project_id = project_id or PROJECT_ID
+    # 
     client = client or get_bq_client(project_id)
     dataset_id, table_id = dataset_table.split('.')
 
