@@ -71,14 +71,10 @@ def tmdb_pipeline():
 
     @task
     def create_staging_table(dataset_table, schema_config):
-        staging_table = create_table(
-            dataset_table = dataset_table,
-            schema_config = schema_config,
-            force_recreate = True,
-            retries = 5
-        )
+        staging_table = create_table(dataset_table = dataset_table, schema_config = schema_config,
+                                     force_recreate = True, confirm_creation = True)
 
-        time.sleep(3)
+        # time.sleep(3)
         return staging_table
 
     @task(multiple_outputs = True)
@@ -221,7 +217,7 @@ def tmdb_pipeline():
         year = YEARS
     )['movie_ids']
     
-    api_ingestion.override(group_id = 'credits')('credits', movie_id = movie_ids)
+    # api_ingestion.override(group_id = 'credits')('credits', movie_id = movie_ids)
 
 
 

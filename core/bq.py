@@ -72,27 +72,22 @@ def create_dataset_if_not_exists(dataset_id, client = None, project_id = None):
             raise
 
 
-def create_table(
-        dataset_table,
-        table_config = None,
-        schema_config = None,
-        client = None,
-        project_id = None,
-        force_recreate = False,
-        retries = None,
-        wait = 2
-):
+@with_client
+def create_table(dataset_table,
+                 table_config = None, schema_config = None, # Must pass one of these
+                 client = None, project_id = None,
+                 force_recreate = False, confirm_creation = False,
+                 retries = 5, wait = 2):
+    
     schema = schema_config or table_config['schema']
     if not schema:
         logger.warning('No schema provided. Please input table_config or schema_config')
         return
 
-    # 
-    client = client or get_bq_client(project_id)
     dataset_id, table_id = dataset_table.split('.')
 
     # Ensure dataset exists
-    create_dataset_if_not_exists(dataset_id, client = client, project_id = project_id)
+    create_dataset_if_not_exists(dataset_id, client = client) #Client has been created with wrapper
 
     table_ref = client.dataset(dataset_id).table(table_id)
 
@@ -103,9 +98,9 @@ def create_table(
             logger.warning(f'Dropped table {dataset_table} (force_recreate=True)')
         except Exception as e:
             if 'Not found' not in str(e):
-                raise
+                raise #TODO confirm raising error does not end the call
             
-    table = bigquery.Table(table_ref, schema=schema)
+    table = bigquery.Table(table_ref, schema = schema)
 
     if table_config:
     # Partitioning
@@ -129,7 +124,7 @@ def create_table(
             raise
 
     # If we want to confirm successful creation before returning
-    if retries:
+    if confirm_creation:
         for _ in range(retries):
             try:
                 client.get_table(dataset_table)
@@ -139,6 +134,7 @@ def create_table(
 
         raise RuntimeError(f"Table {dataset_table} not found after {retries} retries")
     return dataset_table
+
 
 def format_stage_merge_query(staging_table, final_table, schema, merge_cols):
     schema_cols = [col['name'] for col in schema]
