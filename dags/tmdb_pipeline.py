@@ -6,9 +6,10 @@ import tasks.loaders as loader_tasks
 import tasks.helpers as helper_tasks
 import logging, time, json
 from core.bq import create_table, load_all_gcs_to_bq
-from core.gcs import gcs_transform_and_store, delete_gcs_files, delete_gcs_folder
+from core.gcs import delete_gcs_files, delete_gcs_folder
 from schemas.tmdb import MOVIES_SCHEMA, CREDITS_SCHEMA
 from dag_helpers.paths import make_gcs_path_factory
+from pipeline_utils.transform import gcs_transform_and_store
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +80,9 @@ def tmdb_pipeline():
 
     @task(multiple_outputs = True)
     def gcs_initial_transform(schema_config, gcs_path, json_root = None):
+
         tmp_gcs = gcs_transform_and_store(schema_config, gcs_path, json_root = json_root)
-        return {'gcs_path': tmp_gcs['tmp_path'], 'gcs_uri': tmp_gcs['tmp_uri']}
+        return {'gcs_path': tmp_gcs['path'], 'gcs_uri': tmp_gcs['uri']}
     
     @task(multiple_outputs = True)
     def setup_api_call(api_arg_builder, gcs_prefix, **kwargs):
