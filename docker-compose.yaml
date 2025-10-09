@@ -42,6 +42,7 @@ x-airflow-common: &airflow-common
     - ${AIRFLOW_PROJ_DIR:-.}/schemas:/opt/airflow/schemas
     - ${AIRFLOW_PROJ_DIR:-.}/transforms:/opt/airflow/transforms
     - ${AIRFLOW_PROJ_DIR:-.}/utils:/opt/airflow/utils
+    - ${AIRFLOW_PROJ_DIR:-.}/pipeline_utils:/opt/airflow/pipeline_utils
     # --Scripts
     - ${AIRFLOW_PROJ_DIR:-.}/scripts:/opt/airflow/scripts
     # --Requirements for pip install
