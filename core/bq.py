@@ -58,6 +58,10 @@ def with_client(func):
     return wrapper
 
 
+# -------------------------------------------------
+# Resource Creation
+# -------------------------------------------------
+
 @with_client
 def create_dataset_if_not_exists(dataset_id, client = None, project_id = None):
     project_id = project_id or client.project
@@ -136,6 +140,40 @@ def create_table(dataset_table,
     return dataset_table
 
 
+# -------------------------------------------------
+# Data Manipulation and Loading
+# -------------------------------------------------
+
+@with_client
+def bq_merge(schema, merge_cols, staging_table, final_table, client = None, project_id = None):
+    query = format_stage_merge_query(
+        staging_table = staging_table,
+        final_table = final_table,
+        schema = schema,
+        merge_cols = merge_cols,
+    )
+    logger.debug(f'''QUERY = {query}''')
+    client.query(query).result()
+    return
+
+
+@with_client
+def load_all_gcs_to_bq(gcs_uris, dataset_table, client = None, project_id = None):
+    job = client.load_table_from_uri(
+        gcs_uris,
+        dataset_table,
+        job_config = bigquery.LoadJobConfig(
+            source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
+            write_disposition = 'WRITE_APPEND'
+        )
+    )
+    job.result()
+    return
+
+# -------------------------------------------------
+# Formatting
+# -------------------------------------------------
+
 def format_stage_merge_query(staging_table, final_table, schema, merge_cols):
     schema_cols = [col['name'] for col in schema]
 
@@ -174,61 +212,36 @@ def format_stage_merge_query(staging_table, final_table, schema, merge_cols):
 
 
 
-def transform_and_insert_json(schema_config, dataset_table, gcs_path, project_id = None, json_root = None):
-    json_data = load_json_from_gcs(gcs_path, project_id)
+# def transform_and_insert_json(schema_config, dataset_table, gcs_path, project_id = None, json_root = None):
+#     json_data = load_json_from_gcs(gcs_path, project_id)
 
-    # Define context values to use for static/generated columns
-    context_values = {
-        'gcs_uri': gcs_path,
-        'last_updated': bq_current_timestamp()
-    }
+#     # Define context values to use for static/generated columns
+#     context_values = {
+#         'gcs_uri': gcs_path,
+#         'last_updated': bq_current_timestamp()
+#     }
 
-    # Drill down if json_root is provided
-    if json_root:
-        for key in json_root:
-            if isinstance(json_data, dict) and key in json_data:
-                json_data = json_data[key]
-            else:
-                raise KeyError(f"json_root step '{key}' not found in JSON at {gcs_path}")
+#     # Drill down if json_root is provided
+#     if json_root:
+#         for key in json_root:
+#             if isinstance(json_data, dict) and key in json_data:
+#                 json_data = json_data[key]
+#             else:
+#                 raise KeyError(f"json_root step '{key}' not found in JSON at {gcs_path}")
 
-    # At this point, json_data could be a dict (single record) or list (multiple records)
-    if isinstance(json_data, list):
-        rows = [transform_record(record, schema_config, context_values) for record in json_data]
-    else:
-        rows = [transform_record(json_data, schema_config, context_values)]
+#     # At this point, json_data could be a dict (single record) or list (multiple records)
+#     if isinstance(json_data, list):
+#         rows = [transform_record(record, schema_config, context_values) for record in json_data]
+#     else:
+#         rows = [transform_record(json_data, schema_config, context_values)]
     
-    # load to BQ
-    client = get_bq_client(project_id)
-    job = client.load_table_from_json(rows, dataset_table)
-    client.close()
+#     # load to BQ
+#     client = get_bq_client(project_id)
+#     job = client.load_table_from_json(rows, dataset_table)
+#     client.close()
 
-    return job.result()
+#     return job.result()
 
-def bq_merge(schema, merge_cols, staging_table, final_table):
-    client = get_bq_client()
-    query = format_stage_merge_query(
-        staging_table=staging_table,
-        final_table=final_table,
-        schema=schema,
-        merge_cols=merge_cols,
-    )
-    logger.warning(f'''QUERY = {query}''')
-    client.query(query).result()
-    client.close()
-    return
 
-def load_all_gcs_to_bq(gcs_uris, dataset_table):
-    client = get_bq_client()
-    job = client.load_table_from_uri(
-        gcs_uris,
-        dataset_table,
-        job_config = bigquery.LoadJobConfig(
-            source_format = bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
-            write_disposition = 'WRITE_APPEND'
-        )
-    )
-    job.result()
-    client.close()
-    return
 
 

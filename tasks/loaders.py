@@ -1,8 +1,5 @@
-from airflow.providers.google.cloud.transfers.gcs_to_bigquery import GCSToBigQueryOperator
-from airflow.providers.google.cloud.operators.bigquery import BigQueryInsertJobOperator
 from airflow.decorators import task
-from airflow.operators.python import get_current_context
-from core.bq import format_stage_merge_query, bq_merge
+from core.bq import bq_merge
 
 
 @task
