@@ -74,31 +74,6 @@ def with_bucket(func):
 # -------------------------------------------------
 # Uploading
 # -------------------------------------------------
-# @with_bucket
-# def upload_to_gcs(path, data, wrap=True, client=None, project_id=None, bucket=None, bucket_name=None):
-
-#     # Get URI and prep data
-#     uri = f'gs://{bucket_name}/{path}'
-#     if wrap:
-#         data = {'uri': uri, 'data': data}
-
-#     # Uploads data to gcs and returns the uri
-#     blob = bucket.blob(path)
-#     blob.upload_from_string(json.dumps(data), content_type='application/json')
-
-#     logger.info(f'[GCS] Wrote file: {uri}')
-
-#     return uri
-
-# @with_bucket
-# def upload_json(data, path, client=None, project_id=None, bucket=None, bucket_name=None):
-#     blob = bucket.blob(path)
-#     blob.upload_from_string(
-#         '\n'.join(json.dumps(r) for r in data),
-#         content_type = 'application/json'
-#     )
-#     uri = f'gs://{bucket_name}/{path}'
-#     return uri
 
 @with_bucket
 def upload_json_to_gcs(data, path, wrap=True, new_line=False,
@@ -124,20 +99,18 @@ def upload_json_to_gcs(data, path, wrap=True, new_line=False,
 # Reading
 # -------------------------------------------------
 @with_bucket
-def load_json_from_gcs(path, client=None, project_id=None, bucket=None, bucket_name=None):
-    '''Helper: read JSON from a GCS path like 'bucket/folder/file.json'.'''
+def load_file_from_gcs(path, client=None, project_id=None, bucket=None, bucket_name=None):
     blob = bucket.blob(path)
     data = blob.download_as_text()
-    return json.loads(data)
+    return data
 
-
-
-
+# -------------------------------------------------
+# Deleting
+# -------------------------------------------------
 @with_bucket
-def delete_gcs_files(paths, client=None, project_id=None, bucket=None, bucket_name=None):
-    for path in paths:
-        blob = bucket.blob(path)
-        blob.delete()
+def delete_gcs_file(path, client=None, project_id=None, bucket=None, bucket_name=None):
+    blob = bucket.blob(path)
+    blob.delete()
     return
 
 @with_bucket

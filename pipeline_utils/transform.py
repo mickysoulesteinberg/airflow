@@ -1,12 +1,13 @@
-from core.gcs import load_json_from_gcs, upload_json_to_gcs
+from core.gcs import load_file_from_gcs, upload_json_to_gcs
 from core.utils import bq_current_timestamp
-import os, json
+import os, json, csv
+from io import StringIO
 
 def transform_record(record, schema_config, context_values):
     row = {}
     for col in schema_config:
         name = col['name']
-        json_path = col.get('json_path')
+        json_path = col.get('source', name)
         col_type = col.get('type')
 
         if json_path:
@@ -22,9 +23,35 @@ def transform_record(record, schema_config, context_values):
         row[name] = value
     return row
 
+def transform_csv_records(schema_config, gcs_path, delimiter = ','):
+    content = load_file_from_gcs(gcs_path)
+    reader = csv.DictReader(StringIO(content), delimiter=delimiter)
+    csv_data = list(reader)
+
+    # Define context values to use for static/generated columns
+    context_values = {
+        'gcs_uri': gcs_path,
+        'last_updated': bq_current_timestamp()
+    }
+
+    rows = []
+    for record in csv_data:
+        row = {}
+        for col in schema_config:
+            name = col['name']
+            col_type = col.get('type')
+            value = record.get(name)
+            if name in context_values:
+                value = context_values[name]
+            if col_type == 'JSON' and value is not None:
+                value = json.dumps(value)
+            row[name] = value
+        rows.append(row)
+    return rows
 
 def transform_json_records(schema_config, gcs_path, json_root=None):
-    json_data = load_json_from_gcs(gcs_path)
+    data = load_file_from_gcs(gcs_path)
+    json_data = json.loads(data)
 
     # Define context values to use for static/generated columns
     context_values = {
@@ -48,20 +75,34 @@ def transform_json_records(schema_config, gcs_path, json_root=None):
 
     return rows
 
+
+
  
-def gcs_transform_and_store(schema_config, path,
-                             new_dir=None, new_file_name=None,
-                             json_root=None):
+def gcs_transform_and_store(path, schema_config=None, table_config=None, source_type=None,
+                            new_dir=None, new_file_name=None, json_root=None):
     '''
-    Reads JSON from GCS, applies transform, then write transformed back to GCS.
+    Reads data from GCS (JSON or CSV/TXT), applies transform, 
+    then writes transformed JSON back to GCS.
     Returns new GCS URI for downstream bulk load
     '''
+    schema_config = schema_config or table_config.get('schema')
+    if not schema_config:
+        raise ValueError('Schema must be provided via schema_config or table_config')
 
-    # TODO check path goes to a json file
+    # Determine source type from config, from input, or from file name
+    if table_config:
+        source_type = table_config.get('source_type').lower()
+    if source_type is None:
+        source_type = os.path.splitext(path)[-1].lower().lstring('.')
+
+    # Transform logic depends on source type
+    if source_type == 'json':
+        transformed_records = transform_json_records(schema_config, path, json_root=json_root)
+    elif source_type in ['csv', 'txt']:
+        transformed_records = transform_csv_records(schema_config, path)
+    else:
+        raise ValueError(f'Unsupported file extension: {ext}')
     
-    # Transform the raw json to BigQuery-ready format
-    transformed_records = transform_json_records(schema_config, path, json_root=json_root)
-
     # Write to new GCS location
     dir = '/'.join(path.split('/')[:-1])
     new_dir = new_dir or f'{dir}/tmp'

@@ -5,7 +5,7 @@ import tasks.ingestion as ingestion_tasks
 import tasks.loaders as loader_tasks
 import tasks.helpers as helper_tasks
 import logging
-from core.bq import create_table, load_all_gcs_to_bq
+from core.bq import load_all_gcs_to_bq
 from core.gcs import delete_gcs_folder
 from schemas.tmdb import MOVIES_SCHEMA, CREDITS_SCHEMA
 from pipeline_utils.dag_helpers import make_gcs_path_factory
@@ -58,27 +58,21 @@ API_CONFIG = {
     start_date=days_ago(1), 
     schedule=None, 
     catchup=False,
-    params = {'years': YEARS},
-    user_defined_macros = {
+    params={'years': YEARS},
+    user_defined_macros={
         'API_CONFIG': API_CONFIG,
 
     }
 )
 def tmdb_pipeline():
 
-    @task
-    def create_staging_table(dataset_table, schema_config):
-        staging_table = create_table(dataset_table = dataset_table, schema_config = schema_config,
-                                     force_recreate = True, confirm_creation = True)
-        return staging_table
+    @task(multiple_outputs=True)
+    def gcs_initial_transform(gcs_path, table_config, json_root=None):
 
-    @task(multiple_outputs = True)
-    def gcs_initial_transform(schema_config, gcs_path, json_root = None):
-
-        tmp_gcs = gcs_transform_and_store(schema_config, gcs_path, json_root = json_root)
+        tmp_gcs = gcs_transform_and_store(gcs_path, table_config=table_config, json_root=json_root)
         return {'gcs_path': tmp_gcs['path'], 'gcs_uri': tmp_gcs['uri']}
     
-    @task(multiple_outputs = True)
+    @task(multiple_outputs=True)
     def setup_api_call(api_arg_builder, gcs_prefix, **kwargs):
         api_call_dict = api_arg_builder(**kwargs)
         context = get_current_context()
@@ -94,8 +88,8 @@ def tmdb_pipeline():
         return load_all_gcs_to_bq(gcs_uris, dataset_table)
 
     @task_group
-    def api_ingestion_iterate(api, api_path, schema_config, json_root, gcs_folders,
-                              api_arg_builder = None, return_keys = None, **api_kwargs):
+    def api_ingestion_iterate(api, api_path, table_config, json_root, gcs_folders,
+                              api_arg_builder=None, return_keys=None, **api_kwargs):
     
         gcs_prefix = gcs_folders['gcs_prefix']
 
@@ -105,13 +99,13 @@ def tmdb_pipeline():
         return_data = task_builder['return_data']
 
         fetched = ingestion_tasks.api_fetch_and_load(
-            api=api, api_path = api_path, api_args = api_args, gcs_path = gcs_path,
-            return_data = return_data
+            api=api, api_path=api_path, api_args=api_args, gcs_path=gcs_path,
+            return_data=return_data
         )
 
         transformed = gcs_initial_transform(
-            schema_config,
             gcs_path,
+            table_config,
             json_root
         )
 
@@ -123,7 +117,7 @@ def tmdb_pipeline():
         return result
     
 
-    @task(multiple_outputs = True)
+    @task(multiple_outputs=True)
     def create_gcs_folder_paths(api, api_path):
         context = get_current_context()
 
@@ -138,7 +132,7 @@ def tmdb_pipeline():
         return
 
     @task_group
-    def api_ingestion(api_call, return_keys = [], **kwargs):
+    def api_ingestion(api_call, return_keys=[], **kwargs):
 
         api_config = API_CONFIG[api_call]
         api = api_config['api']
@@ -146,40 +140,41 @@ def tmdb_pipeline():
 
         gcs_folders = create_gcs_folder_paths(api, api_path)
 
-        bq_schema_config = api_config['schema']['schema']
+        table_config = api_config['schema']
+        bq_schema_config = table_config['schema']
 
         # Task: Create empty staging table in BigQuery
-        staging_table = create_staging_table(
-            dataset_table = api_config['staging_table'],
-            schema_config = bq_schema_config
+        staging_table = loader_tasks.create_staging_table(
+            dataset_table=api_config['staging_table'],
+            schema_config=bq_schema_config
         )
 
         # Task group: Loop over kwargs: API Fetch -> GCS -> BQ Staging
         ingestion = api_ingestion_iterate.partial(
-            api = api_config['api'],
-            api_path = api_config['api_path'],
-            return_keys = return_keys,
-            schema_config = bq_schema_config,
-            api_arg_builder = api_config['api_arg_builder'],
-            staging_table = staging_table,
-            json_root = api_config['json_root'],
-            gcs_folders = gcs_folders
+            api=api_config['api'],
+            api_path=api_config['api_path'],
+            return_keys=return_keys,
+            table_config=table_config,
+            api_arg_builder=api_config['api_arg_builder'],
+            staging_table=staging_table,
+            json_root=api_config['json_root'],
+            gcs_folders=gcs_folders
         ).expand(**kwargs)
 
 
 
         gcs_uris = helper_tasks.reduce_xcoms.override(
-            task_id = 'reduce_xcom_gcs_uri'
+            task_id='reduce_xcom_gcs_uri'
         )(ingestion['gcs_uri'])
 
 
         stage = gcs_to_stg(gcs_uris, staging_table)
 
         merge = loader_tasks.bq_stg_to_final_merge(
-            staging_table = staging_table,
-            final_table = api_config['final_table'],
-            schema = bq_schema_config,
-            merge_cols = api_config['schema']['row_id']
+            staging_table=staging_table,
+            final_table=api_config['final_table'],
+            schema=bq_schema_config,
+            merge_cols=table_config['row_id']
         )
 
         cleanup = delete_gcs_tmp_folder(gcs_folders['gcs_tmp_prefix'])
@@ -189,20 +184,20 @@ def tmdb_pipeline():
         returned_data = {}
         for key in return_keys:
             returned_data[key] = helper_tasks.reduce_xcoms.override(
-                task_id = f'reduce_xcom_{key}'
+                task_id=f'reduce_xcom_{key}'
             )(ingestion[key])
 
         return returned_data
     
     movie_ids = api_ingestion.override(
-        group_id = 'discover_movies'
+        group_id='discover_movies'
     )(
         'discover_movies',
-        return_keys = ['movie_ids'],
-        year = YEARS
+        return_keys=['movie_ids'],
+        year=YEARS
     )['movie_ids']
     
-    api_ingestion.override(group_id = 'credits')('credits', movie_id = movie_ids)
+    api_ingestion.override(group_id='credits')('credits', movie_id=movie_ids)
 
 
 
