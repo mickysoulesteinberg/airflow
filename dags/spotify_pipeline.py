@@ -1,6 +1,8 @@
 from airflow.decorators import dag, task
 from airflow.utils.dates import days_ago
 import tasks.ingestion as ingestion_tasks
+from dag_helpers.paths import make_gcs_path_factory
+from airflow.operators.python import get_current_context
 
 from core.api import get_oauth2_token
 import logging
@@ -23,22 +25,22 @@ def spotify_pipeline():
 
     api_path = 'artists'
 
-    # Get the GCS Path to store the data
-    # TODO replace with get_gcs_path_for_task and delete get_storage_data task
-    gcs_path = ingestion_tasks.get_storage_data(
-        api = API,
-        api_path = api_path,
-        call_params = {'artist': ARTIST_ID}
-    )
+    @task
+    def get_gcs_path(api, api_path, artist_id):
+        context = get_current_context()
+        make_prefix, make_file_name = make_gcs_path_factory(context)
+        gcs_prefix = make_prefix(api, api_path)
+        gcs_file_name = make_file_name(f'artist{artist_id}')
+        return f'{gcs_prefix}/{gcs_file_name}'
 
-    ingestion_tasks.api_fetch(
+    ingestion_tasks.api_fetch_and_load(
         api = API,
         api_path = api_path,
         api_args = {
             'path_vars': {'artist_id': ARTIST_ID},
             'token_data': get_token()
         },
-        gcs_path = gcs_path,
+        gcs_path = get_gcs_path(API, api_path, ARTIST_ID),
         return_data = {
             'artist_id': 'id',
             'artist_name': 'name',
