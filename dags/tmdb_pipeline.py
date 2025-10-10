@@ -4,9 +4,9 @@ from airflow.operators.python import get_current_context
 import tasks.ingestion as ingestion_tasks
 import tasks.loaders as loader_tasks
 import tasks.helpers as helper_tasks
-import logging, time, json
+import logging
 from core.bq import create_table, load_all_gcs_to_bq
-from core.gcs import delete_gcs_files, delete_gcs_folder
+from core.gcs import delete_gcs_folder
 from schemas.tmdb import MOVIES_SCHEMA, CREDITS_SCHEMA
 from pipeline_utils.dag_helpers import make_gcs_path_factory
 from pipeline_utils.transform import gcs_transform_and_store
