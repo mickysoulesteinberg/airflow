@@ -19,7 +19,7 @@ YEARS = [2003, 2004]
 
 # ----- Dag-level constants (static)
 # -----
-API_CONFIG1 = {
+API_CONFIG = {
     'discover_movies': {
         'api': 'tmdb',
         'api_path': 'discover_movies',
@@ -62,7 +62,7 @@ API_CONFIG1 = {
     catchup=False,
     params = {'years': YEARS},
     user_defined_macros = {
-        'API_CONFIG': API_CONFIG1,
+        'API_CONFIG': API_CONFIG,
 
     }
 )
@@ -157,7 +157,7 @@ def tmdb_pipeline():
     @task_group
     def api_ingestion(api_call, return_keys = [], **kwargs):
 
-        api_config = API_CONFIG1[api_call]
+        api_config = API_CONFIG[api_call]
         api = api_config['api']
         api_path = api_config['api_path']
 
