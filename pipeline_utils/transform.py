@@ -1,4 +1,4 @@
-from core.gcs import load_json_from_gcs, upload_json
+from core.gcs import load_json_from_gcs, upload_json_to_gcs
 from core.utils import bq_current_timestamp
 import os
 
@@ -68,7 +68,7 @@ def gcs_transform_and_store(schema_config, path,
     new_file_name = new_file_name or os.path.basename(path).replace('.json', '_transformed.json')
     new_blob_path = f'{new_dir}/{new_file_name}'
 
-    new_uri = upload_json(transformed_records, new_blob_path)
+    new_uri = upload_json_to_gcs(transformed_records, new_blob_path, wrap=False, new_line=True)
 
     return {
         'path': new_blob_path,

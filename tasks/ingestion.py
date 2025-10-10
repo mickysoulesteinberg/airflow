@@ -1,7 +1,7 @@
 from airflow.decorators import task
 import logging, jmespath
 from core.api import api_get
-from core.gcs import upload_to_gcs
+from core.gcs import upload_json_to_gcs
 # from core.bq import create_table
 from airflow.operators.python import get_current_context
 from core.storage_helpers import get_gcs_path
@@ -12,21 +12,21 @@ logger = logging.getLogger(__name__)
 
 from core.storage_helpers import compute_storage_metadata
 
-@task
-def get_storage_data(api, api_path, call_params=None):
-    context = get_current_context()
-    dag_id = context['dag'].dag_id
-    ds_nodash = context['ds_nodash']
+# @task
+# def get_storage_data(api, api_path, call_params=None):
+#     context = get_current_context()
+#     dag_id = context['dag'].dag_id
+#     ds_nodash = context['ds_nodash']
 
-    gcs_path, staging, final = compute_storage_metadata(
-        api = api,
-        api_path = api_path,
-        top_folder = dag_id,
-        run_suffix = ds_nodash,
-        call_params = call_params
-    )
+#     gcs_path, staging, final = compute_storage_metadata(
+#         api = api,
+#         api_path = api_path,
+#         top_folder = dag_id,
+#         run_suffix = ds_nodash,
+#         call_params = call_params
+#     )
 
-    return gcs_path
+#     return gcs_path
 
 
 @task(multiple_outputs=True)
@@ -74,7 +74,7 @@ def api_fetch_and_load(api=None, api_path=None, api_args=None, gcs_path=None,
 
     # ---- Upload to GCS ----
     if gcs_path:
-        upload_to_gcs(path=gcs_path, data=data)
+        upload_json_to_gcs(data, gcs_path)
         return_dict['gcs_path'] = gcs_path
 
     # ---- Extract return_data ----
@@ -130,7 +130,7 @@ def api_fetch(api=None, api_path=None, api_args=None, gcs_path=None,
 
     # ---- Upload to GCS ----
     if gcs_path:
-        upload_to_gcs(path=gcs_path, data=data)
+        upload_json_to_gcs(data, path)
         return_dict['gcs_path'] = gcs_path
 
     # ---- Extract return_data ----
