@@ -8,7 +8,7 @@ import logging, time, json
 from core.bq import create_table, load_all_gcs_to_bq
 from core.gcs import delete_gcs_files, delete_gcs_folder
 from schemas.tmdb import MOVIES_SCHEMA, CREDITS_SCHEMA
-from dag_helpers.paths import make_gcs_path_factory
+from pipeline_utils.dag_helpers import make_gcs_path_factory
 from pipeline_utils.transform import gcs_transform_and_store
 
 logger = logging.getLogger(__name__)
@@ -202,7 +202,7 @@ def tmdb_pipeline():
         year = YEARS
     )['movie_ids']
     
-    # api_ingestion.override(group_id = 'credits')('credits', movie_id = movie_ids)
+    api_ingestion.override(group_id = 'credits')('credits', movie_id = movie_ids)
 
 
 

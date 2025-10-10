@@ -1,6 +1,6 @@
 from core.gcs import load_json_from_gcs, upload_json_to_gcs
 from core.utils import bq_current_timestamp
-import os
+import os, json
 
 def transform_record(record, schema_config, context_values):
     row = {}

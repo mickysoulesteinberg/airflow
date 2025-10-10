@@ -1,7 +1,7 @@
 from airflow.decorators import dag, task
 from airflow.utils.dates import days_ago
 import tasks.ingestion as ingestion_tasks
-from dag_helpers.paths import make_gcs_path_factory
+from pipeline_utils.dag_helpers import make_gcs_path_factory
 from airflow.operators.python import get_current_context
 
 from core.api import get_oauth2_token
