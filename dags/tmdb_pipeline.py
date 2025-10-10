@@ -35,7 +35,6 @@ API_CONFIG = {
                     'page': 1
                 }
             },
-            'call_params': {'year': kwargs['year']},
             'call_id': f'year{kwargs['year']}',
             'return_data': {'movie_ids': 'results[].id'}
         }
@@ -49,7 +48,6 @@ API_CONFIG = {
         'schema': CREDITS_SCHEMA,
         'api_arg_builder': lambda **kwargs: {
             'api_args': {'path_vars': {'movie_id': kwargs['movie_id']}},
-            'call_params': {'movie': kwargs['movie_id']},
             'call_id': f'movie{kwargs['movie_id']}'
         }
     }
@@ -68,14 +66,10 @@ API_CONFIG = {
 )
 def tmdb_pipeline():
 
-
-
     @task
     def create_staging_table(dataset_table, schema_config):
         staging_table = create_table(dataset_table = dataset_table, schema_config = schema_config,
                                      force_recreate = True, confirm_creation = True)
-
-        # time.sleep(3)
         return staging_table
 
     @task(multiple_outputs = True)
@@ -98,24 +92,11 @@ def tmdb_pipeline():
     @task
     def gcs_to_stg(gcs_uris, dataset_table):
         return load_all_gcs_to_bq(gcs_uris, dataset_table)
-    
-    @task
-    def cleanup_temp_files(gcs_paths):
-        delete_gcs_files(gcs_paths)
-        return
 
     @task_group
-    def api_ingestion_iterate(
-        api,
-        api_path,
-        schema_config,
-        json_root,
-        gcs_folders,
-        api_arg_builder = None,
-        return_keys = None,
-        **api_kwargs):
+    def api_ingestion_iterate(api, api_path, schema_config, json_root, gcs_folders,
+                              api_arg_builder = None, return_keys = None, **api_kwargs):
     
-
         gcs_prefix = gcs_folders['gcs_prefix']
 
         task_builder = setup_api_call(api_arg_builder, gcs_prefix, **api_kwargs)
@@ -130,9 +111,11 @@ def tmdb_pipeline():
 
         transformed = gcs_initial_transform(
             schema_config,
-            fetched['gcs_path'],
+            gcs_path,
             json_root
         )
+
+        fetched >> transformed
 
         result = {key: fetched[key] for key in return_keys}
         result['gcs_uri'] = transformed['gcs_uri']
