@@ -1,0 +1,21 @@
+# Python cache and virtualenvs
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Airflow local data
+logs/
+plugins/__pycache__/
+dags/__pycache__/
+
+# OS/editor clutter
+.DS_Store
+.idea/
+.vscode/
+
+# Credentials and environment files
+.env
+.gcp/
