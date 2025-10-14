@@ -96,7 +96,7 @@ def create_table(dataset_table,
     if force_recreate:
         try:
             client.delete_table(table_ref)
-            logger.warning(f'Dropped table {dataset_table} (force_recreate=True)')
+            logger.debug(f'Dropped table {dataset_table} (force_recreate=True)')
         except Exception as e:
             if 'Not found' not in str(e):
                 raise #TODO confirm raising error does not end the call

@@ -1,7 +1,5 @@
 from google.cloud import storage
-import json, logging, os
-from utils.config import CONFIG
-from core.utils import bq_current_timestamp
+import json, logging
 from contextlib import contextmanager
 from core.env import resolve_project, resolve_bucket
 
@@ -104,6 +102,13 @@ def load_file_from_gcs(path, client=None, project_id=None, bucket=None, bucket_n
     data = blob.download_as_text()
     return data
 
+@with_bucket
+def list_gcs_files(prefix, client=None, project_id=None, bucket=None, bucket_name=None):
+    '''Lists all blobs under a GCS folder path'''
+    blobs = bucket.list_blobs(prefix=prefix)
+    files = [f'gs://{bucket_name}/{blob.name}' for blob in blobs]
+    return files
+
 # -------------------------------------------------
 # Deleting
 # -------------------------------------------------
@@ -123,7 +128,6 @@ def delete_gcs_folder(folder_path, client=None, project_id=None, bucket=None, bu
         deleted += 1
     logger.info(f'Deleted {deleted} blobs from gs://{bucket_name}/{folder_path}')
     return
-
 
 
 
