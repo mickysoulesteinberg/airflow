@@ -4,12 +4,12 @@ from airflow.operators.python import get_current_context
 import tasks.ingestion as ingestion_tasks
 import tasks.loaders as loader_tasks
 import tasks.helpers as helper_tasks
+import tasks.transforms as transform_tasks
 import logging
 from core.bq import load_all_gcs_to_bq
 from core.gcs import delete_gcs_folder
 from schemas.tmdb import MOVIES_SCHEMA, CREDITS_SCHEMA
 from pipeline_utils.dag_helpers import make_gcs_path_factory
-from pipeline_utils.transform import gcs_transform_and_store
 
 logger = logging.getLogger(__name__)
 
@@ -65,12 +65,6 @@ API_CONFIG = {
     }
 )
 def tmdb_pipeline():
-
-    @task(multiple_outputs=True)
-    def gcs_initial_transform(gcs_path, table_config, json_root=None):
-
-        tmp_gcs = gcs_transform_and_store(gcs_path, table_config=table_config, json_root=json_root)
-        return {'gcs_path': tmp_gcs['path'], 'gcs_uri': tmp_gcs['uri']}
     
     @task(multiple_outputs=True)
     def setup_api_call(api_arg_builder, gcs_prefix, **kwargs):
@@ -103,17 +97,12 @@ def tmdb_pipeline():
             return_data=return_data
         )
 
-        transformed = gcs_initial_transform(
-            gcs_path,
-            table_config,
-            json_root
-        )
+        transformed_uris = transform_tasks.gcs_transform_for_bigquery(gcs_path, table_config, json_root=json_root)
 
-        fetched >> transformed
+        fetched >> transformed_uris
 
         result = {key: fetched[key] for key in return_keys}
-        result['gcs_uri'] = transformed['gcs_uri']
-        result['gcs_path'] = transformed['gcs_path']
+        result['gcs_uri'] = transformed_uris
         return result
     
 
@@ -197,7 +186,7 @@ def tmdb_pipeline():
         year=YEARS
     )['movie_ids']
     
-    api_ingestion.override(group_id='credits')('credits', movie_id=movie_ids)
+    # api_ingestion.override(group_id='credits')('credits', movie_id=movie_ids)
 
 
 
