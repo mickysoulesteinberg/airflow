@@ -27,7 +27,8 @@ def transform_record(record, schema_config, context_values=None):
     return row
 
 
-def transform_csv_records(content, schema_config, context_values=None, delimiter=','):
+def transform_csv_records(content, schema_config, context_values=None, delimiter=None):
+    delimiter = delimiter or ','
     reader = csv.DictReader(StringIO(content), delimiter=delimiter)
     csv_data = list(reader)
 
@@ -64,6 +65,7 @@ def gcs_transform_and_store(paths, schema_config=None, table_config=None, source
     then writes transformed JSON back to GCS.
     Returns new GCS URI for downstream bulk load
     '''
+    logger.debug(f'gcs_transform_and_store: paths={paths}, bucket_name={bucket_name}, new_dir={new_dir}, new_file_name={new_file_name}')
     schema_config = schema_config or table_config.get('schema')
     if not schema_config:
         raise ValueError('Schema must be provided via schema_config or table_config')
@@ -91,7 +93,7 @@ def gcs_transform_and_store(paths, schema_config=None, table_config=None, source
         context_values = {
             'gcs_uri': resolve_gcs_uri(path, bucket_name=bucket_name)
         }
-        logger.warning(f'context_values: {context_values}')
+        logger.debug(f'context_values: {context_values}')
 
         # Transform data depending on source type
         if source_type is None:

@@ -26,7 +26,7 @@ API_CONFIG = {
         'staging_table': 'tmdb.discover_movies_stg',
         'final_table': 'tmdb.discover_movies',
         'json_root': ['data', 'results'],
-        'schema': MOVIES_SCHEMA,
+        'table_config': MOVIES_SCHEMA,
         'api_arg_builder': lambda **kwargs: {
             'api_args': {
                 'params': {
@@ -45,7 +45,7 @@ API_CONFIG = {
         'staging_table': 'tmdb.credits_stg',
         'final_table': 'tmdb.credits',
         'json_root': ['data'],
-        'schema': CREDITS_SCHEMA,
+        'table_config': CREDITS_SCHEMA,
         'api_arg_builder': lambda **kwargs: {
             'api_args': {'path_vars': {'movie_id': kwargs['movie_id']}},
             'call_id': f'movie{kwargs['movie_id']}'
@@ -129,7 +129,7 @@ def tmdb_pipeline():
 
         gcs_folders = create_gcs_folder_paths(api, api_path)
 
-        table_config = api_config['schema']
+        table_config = api_config['table_config']
         bq_schema_config = table_config['schema']
 
         # Task: Create empty staging table in BigQuery
