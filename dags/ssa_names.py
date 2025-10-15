@@ -30,6 +30,8 @@ def ssa_names():
     staging_table_name = config['staging_table']
     gcs_bucket = config.get('gcs_bucket')
     gcs_path = config.get('gcs_path')
+    final_table_name = config['final_table']
+    merge_cols = table_config['merge_cols']
 
     staging_table = loader_tasks.create_staging_table(
         dataset_table=staging_table_name,
@@ -38,4 +40,14 @@ def ssa_names():
 
     transformed_uris = transform_tasks.gcs_transform_for_bigquery(gcs_path, table_config, bucket_name=gcs_bucket)
 
+    stage = loader_tasks.gcs_to_bq_stg(transformed_uris, staging_table)
+
+    merge = loader_tasks.bq_stg_to_final_merge(
+        staging_table=staging_table,
+        final_table=final_table_name,
+        schema=bq_schema_config,
+        merge_cols=merge_cols
+    )
+
+    stage >> merge
 ssa_names()

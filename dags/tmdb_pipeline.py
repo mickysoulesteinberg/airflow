@@ -5,9 +5,8 @@ import tasks.ingestion as ingestion_tasks
 import tasks.loaders as loader_tasks
 import tasks.helpers as helper_tasks
 import tasks.transforms as transform_tasks
+import tasks.cleanup as cleanup_tasks
 import logging
-from core.bq import load_all_gcs_to_bq
-from core.gcs import delete_gcs_folder
 from schemas.tmdb import MOVIES_SCHEMA, CREDITS_SCHEMA
 from pipeline_utils.dag_helpers import make_gcs_path_factory
 
@@ -76,11 +75,6 @@ def tmdb_pipeline():
         return_data = api_call_dict.get('return_data')
         return {'gcs_path': gcs_path, 'api_args': api_args, 'return_data': return_data}
 
-    
-    @task
-    def gcs_to_stg(gcs_uris, dataset_table):
-        return load_all_gcs_to_bq(gcs_uris, dataset_table)
-
     @task_group
     def api_ingestion_iterate(api, api_path, table_config, json_root, gcs_folders,
                               api_arg_builder=None, return_keys=None, **api_kwargs):
@@ -114,11 +108,7 @@ def tmdb_pipeline():
         gcs_prefix = make_gcs_prefix(api, api_path)
         gcs_tmp_prefix = f'{gcs_prefix}/tmp'
         return {'gcs_prefix': gcs_prefix, 'gcs_tmp_prefix': gcs_tmp_prefix}
-    
-    @task
-    def delete_gcs_tmp_folder(tmp_folder_path):
-        delete_gcs_folder(tmp_folder_path)
-        return
+
 
     @task_group
     def api_ingestion(api_call, return_keys=[], **kwargs):
@@ -157,7 +147,7 @@ def tmdb_pipeline():
         )(ingestion['gcs_uri'])
 
 
-        stage = gcs_to_stg(gcs_uris, staging_table)
+        stage = loader_tasks.gcs_to_bq_stg(gcs_uris, staging_table)
 
         merge = loader_tasks.bq_stg_to_final_merge(
             staging_table=staging_table,
@@ -166,7 +156,7 @@ def tmdb_pipeline():
             merge_cols=table_config['row_id']
         )
 
-        cleanup = delete_gcs_tmp_folder(gcs_folders['gcs_tmp_prefix'])
+        cleanup = cleanup_tasks.delete_gcs_tmp_folder(gcs_folders['gcs_tmp_prefix'])
 
         stage >> merge >> cleanup
 
