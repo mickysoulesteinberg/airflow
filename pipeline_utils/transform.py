@@ -27,10 +27,11 @@ def transform_record(record, schema_config, context_values=None):
     return row
 
 
-def transform_csv_records(content, schema_config, context_values=None, delimiter=None):
+def transform_csv_records(content, schema_config, context_values=None, delimiter=None, fieldnames=None):
     delimiter = delimiter or ','
-    reader = csv.DictReader(StringIO(content), delimiter=delimiter)
+    reader = csv.DictReader(StringIO(content), fieldnames=fieldnames, delimiter=delimiter)
     csv_data = list(reader)
+    logger.debug(f'csv_data sample: {csv_data[:2]}')
 
     rows = [transform_record(record, schema_config, context_values=context_values) for record in csv_data]
     return rows
@@ -58,7 +59,7 @@ def transform_json_records(content, schema_config, context_values={}, json_root=
 @with_bucket
 def gcs_transform_and_store(paths, schema_config=None, table_config=None, source_type=None,
                             new_dir=None, new_file_name=None, 
-                            json_root=None, delimiter=None,
+                            json_root=None, delimiter=None, fieldnames=None,
                             client=None, project_id=None, bucket=None, bucket_name=None):
     '''
     Reads data from GCS (JSON or CSV/TXT), applies transform, 
@@ -69,7 +70,9 @@ def gcs_transform_and_store(paths, schema_config=None, table_config=None, source
     schema_config = schema_config or table_config.get('schema')
     if not schema_config:
         raise ValueError('Schema must be provided via schema_config or table_config')
-    source_type = source_type or table_config.get('source_type')
+    if not source_type and table_config:
+        # Get source type from table config if not explicitly provided
+        source_type = table_config.get('source_type')
     
     # Handle path input as single or list
     if isinstance(paths, str):
@@ -98,13 +101,20 @@ def gcs_transform_and_store(paths, schema_config=None, table_config=None, source
         # Transform data depending on source type
         if source_type is None:
             # Use the file extension to determine source type
+            logger.warning('source_type not provided, inferring from file extension')
             source_type = os.path.splitext(path)[-1].lower().lstring('.')
         if source_type == 'json':
             transformed_records = transform_json_records(content, schema_config, context_values=context_values,
                                                         json_root=json_root)
         elif source_type in ['csv', 'txt']:
+            if table_config:
+                delimiter = table_config.get('delimiter', delimiter)
+                fieldnames = table_config.get('fieldnames', fieldnames)
+            if not fieldnames:
+                logger.warning('fieldnames not provided, inferring from CSV header')
+
             transformed_records = transform_csv_records(content, schema_config, context_values=context_values,
-                                                        delimiter=delimiter)
+                                                        delimiter=delimiter, fieldnames=fieldnames)
         else:
             raise ValueError(f'Unsupported file extension: {source_type}')
         
