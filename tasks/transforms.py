@@ -20,7 +20,7 @@ def gcs_transform_for_bigquery(gcs_input, table_config, json_root=None, delimite
     - a prefix ending with '/' (to indicate all files in a folder)
     - a wildcard path, e.g. 'path/*.json'
     '''
-    logger.warning(f'gcs_transform_for_bigquery: gcs_input={gcs_input}, bucket_name={bucket_name}, new_dir={new_dir}')
+    logger.debug(f'gcs_transform_for_bigquery: gcs_input={gcs_input}, bucket_name={bucket_name}, new_dir={new_dir}')
 
     gcs_paths = []
     if isinstance(gcs_input, str):

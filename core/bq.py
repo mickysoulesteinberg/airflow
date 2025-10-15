@@ -11,26 +11,26 @@ logger = logging.getLogger(__name__)
 # -------------------------------------------------
 
 # Always used to create the client
-def get_bq_client(project_id = None):
+def get_bq_client(project_id=None):
     '''
     Creates and returns a new BigQuery client.
     If project_id is None, defaults from environment/credentials.
     '''
     project_id = resolve_project(project_id)
     logger.debug(f'Creating BigQuery client (project_id: {project_id})')
-    return bigquery.Client(project = project_id)
+    return bigquery.Client(project=project_id)
 
 
 # Explicitly manage client lifecycle
 @contextmanager
-def bq_client_context(project_id = None):
+def bq_client_context(project_id=None):
     '''
     Context manager that yields a BigQuery client and ensures it is closed.
     Usage:
         with bq_client_context('my-project') as client:
             ...
     '''
-    client = get_bq_client(project_id = project_id)
+    client = get_bq_client(project_id=project_id)
     try:
         yield client
     finally:
@@ -45,14 +45,14 @@ def with_client(func):
     If project_id is not passed, this wrapper replaces it so it can be referenced
         in the wrapped function
     '''
-    def wrapper(*args, client = None, project_id = None, **kwargs):
+    def wrapper(*args, client=None, project_id=None, **kwargs):
         if client is not None:
             # Client is provided, don't bother opening/closing it, but do populate project_id
-            return func(*args, client = client, project_id = client.project, **kwargs)
+            return func(*args, client=client, project_id=client.project, **kwargs)
         
         # Otherwise, open a managed client context
         with bq_client_context(project_id) as managed_client:
-            return func(*args, client = managed_client, project_id = managed_client.project, **kwargs)
+            return func(*args, client=managed_client, project_id=managed_client.project, **kwargs)
     return wrapper
 
 
@@ -61,7 +61,7 @@ def with_client(func):
 # -------------------------------------------------
 
 @with_client
-def create_dataset_if_not_exists(dataset_id, client = None, project_id = None):
+def create_dataset_if_not_exists(dataset_id, client=None, project_id=None):
     dataset_ref = bigquery.Dataset(f'{project_id}.{dataset_id}')
     try:
         client.create_dataset(dataset_ref)
@@ -75,10 +75,10 @@ def create_dataset_if_not_exists(dataset_id, client = None, project_id = None):
 
 @with_client
 def create_table(dataset_table,
-                 table_config = None, schema_config = None, # Must pass one of these
-                 client = None, project_id = None,
-                 force_recreate = False, confirm_creation = False,
-                 retries = 5, wait = 2):
+                 table_config=None, schema_config=None, # Must pass one of these
+                 client=None, project_id=None,
+                 force_recreate=False, confirm_creation=False,
+                 retries=5, wait=2):
     
     schema = schema_config or table_config['schema']
     if not schema:
@@ -88,7 +88,7 @@ def create_table(dataset_table,
     dataset_id, table_id = dataset_table.split('.')
 
     # Ensure dataset exists
-    create_dataset_if_not_exists(dataset_id, client = client) #Client has been created with wrapper
+    create_dataset_if_not_exists(dataset_id, client=client) #Client has been created with wrapper
 
     table_ref = client.dataset(dataset_id).table(table_id)
 
@@ -96,12 +96,12 @@ def create_table(dataset_table,
     if force_recreate:
         try:
             client.delete_table(table_ref)
-            logger.debug(f'Dropped table {dataset_table} (force_recreate=True)')
+            logger.warning(f'Dropped table {dataset_table} (force_recreate=True)')
         except Exception as e:
             if 'Not found' not in str(e):
                 raise #TODO confirm raising error does not end the call
             
-    table = bigquery.Table(table_ref, schema = schema)
+    table = bigquery.Table(table_ref, schema=schema)
 
     if table_config:
     # Partitioning
@@ -142,12 +142,12 @@ def create_table(dataset_table,
 # -------------------------------------------------
 
 @with_client
-def bq_merge(schema, merge_cols, staging_table, final_table, client = None, project_id = None):
+def bq_merge(schema, merge_cols, staging_table, final_table, client=None, project_id=None):
     query = format_stage_merge_query(
-        staging_table = staging_table,
-        final_table = final_table,
-        schema = schema,
-        merge_cols = merge_cols,
+        staging_table=staging_table,
+        final_table=final_table,
+        schema=schema,
+        merge_cols=merge_cols,
     )
     logger.debug(f'''QUERY = {query}''')
     client.query(query).result()
@@ -155,7 +155,7 @@ def bq_merge(schema, merge_cols, staging_table, final_table, client = None, proj
 
 
 @with_client
-def load_all_gcs_to_bq(gcs_uris, dataset_table, client = None, project_id = None):
+def load_all_gcs_to_bq(gcs_uris, dataset_table, client=None, project_id=None):
     job = client.load_table_from_uri(
         gcs_uris,
         dataset_table,
@@ -205,39 +205,6 @@ def format_stage_merge_query(staging_table, final_table, schema, merge_cols):
 
 
 
-
-
-
-
-# def transform_and_insert_json(schema_config, dataset_table, gcs_path, project_id = None, json_root = None):
-#     json_data = load_json_from_gcs(gcs_path, project_id)
-
-#     # Define context values to use for static/generated columns
-#     context_values = {
-#         'gcs_uri': gcs_path,
-#         'last_updated': bq_current_timestamp()
-#     }
-
-#     # Drill down if json_root is provided
-#     if json_root:
-#         for key in json_root:
-#             if isinstance(json_data, dict) and key in json_data:
-#                 json_data = json_data[key]
-#             else:
-#                 raise KeyError(f"json_root step '{key}' not found in JSON at {gcs_path}")
-
-#     # At this point, json_data could be a dict (single record) or list (multiple records)
-#     if isinstance(json_data, list):
-#         rows = [transform_record(record, schema_config, context_values) for record in json_data]
-#     else:
-#         rows = [transform_record(json_data, schema_config, context_values)]
-    
-#     # load to BQ
-#     client = get_bq_client(project_id)
-#     job = client.load_table_from_json(rows, dataset_table)
-#     client.close()
-
-#     return job.result()
 
 
 
