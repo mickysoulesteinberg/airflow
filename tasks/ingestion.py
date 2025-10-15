@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 @task(multiple_outputs=True)
 def api_fetch_and_load(api=None, api_path=None, api_args=None, gcs_path=None,
-              return_data=None, call_params=None, api_call_dict=None):
+              return_data=None, api_call_dict=None):
     """
     Fetch data from an API and optionally upload to GCS.
     Can be called in two ways:
@@ -20,11 +20,11 @@ def api_fetch_and_load(api=None, api_path=None, api_args=None, gcs_path=None,
     # ---- Allow dict-style input for flexibility ----
     if api_call_dict:
         # merge values from dict into function vars if not passed explicitly
-        api = api_call_dict.get('api', api)
-        api_path = api_call_dict.get('api_path', api_path)
-        api_args = api_call_dict.get('api_args', api_args)
-        gcs_path = api_call_dict.get('gcs_path', gcs_path)
-        return_data = api_call_dict.get('return_data', return_data)
+        api = api or api_call_dict.get('api')
+        api_path = api_path or api_call_dict.get('api_path')
+        api_args = api_args or api_call_dict.get('api_args')
+        gcs_path = gcs_path or api_call_dict.get('gcs_path')
+        return_data = return_data or api_call_dict.get('return_data')
 
     # ---- Safety check ----
     if not api or not api_path or not api_args:
