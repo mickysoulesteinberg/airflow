@@ -1,4 +1,4 @@
-from core.bq import create_table
+from pipeline_utils.create_table import create_table_from_config
 from schemas import ALL_TABLES
 
 if __name__ == '__main__':
@@ -6,5 +6,5 @@ if __name__ == '__main__':
     FORCE_RECREATE = False
 
     for dataset_table, table_config in ALL_TABLES.items():
-        create_table(dataset_table, table_config, force_recreate = FORCE_RECREATE)
+        create_table_from_config(dataset_table, table_config, force_recreate = FORCE_RECREATE)
         

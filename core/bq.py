@@ -1,8 +1,8 @@
 from google.cloud import bigquery
-import logging, os, textwrap, time
-from google.api_core.exceptions import NotFound
+import logging, time, textwrap
 from contextlib import contextmanager
 from core.env import resolve_project
+from google.api_core.exceptions import NotFound
 
 logger = logging.getLogger(__name__)
 
@@ -61,81 +61,92 @@ def with_client(func):
 # -------------------------------------------------
 
 @with_client
-def create_dataset_if_not_exists(dataset_id, client=None, project_id=None):
-    dataset_ref = bigquery.Dataset(f'{project_id}.{dataset_id}')
+def create_dataset(resource_id, client=None, project_id=None):
+    '''Creates a new dataset from dataset_id or dataset_id.table_id'''
+    dataset_ref = get_dataset_ref(resource_id, client=client, project_id=project_id)
     try:
         client.create_dataset(dataset_ref)
-        logger.info(f'Created dataset {dataset_id}.')
+        logger.info(f'Created dataset {project_id}.{dataset_ref.dataset_id}')
     except Exception as e:
         if 'Already Exists' in str(e):
-            logger.info(f'Dataset {dataset_id} already exists.')
+            logger.info(f'Dataset {project_id}.{dataset_ref.dataset_id} already exists.')
         else:
-            raise
-
+            raise(e)
 
 @with_client
-def create_table(dataset_table,
-                 table_config=None, schema_config=None, # Must pass one of these
-                 client=None, project_id=None,
-                 force_recreate=False, confirm_creation=False,
-                 retries=5, wait=2):
-    
-    schema = schema_config or table_config['schema']
-    if not schema:
-        logger.warning('No schema provided. Please input table_config or schema_config')
-        return
-
-    dataset_id, table_id = dataset_table.split('.')
-
-    # Ensure dataset exists
-    create_dataset_if_not_exists(dataset_id, client=client) #Client has been created with wrapper
-
-    table_ref = client.dataset(dataset_id).table(table_id)
-
-    # Drop table if force_recreate
-    if force_recreate:
-        try:
-            client.delete_table(table_ref)
-            logger.warning(f'Dropped table {dataset_table} (force_recreate=True)')
-        except Exception as e:
-            if 'Not found' not in str(e):
-                raise #TODO confirm raising error does not end the call
-            
+def create_table(dataset_table, schema, partition_config=None, clustering=None,
+                 client=None, project_id=None):
+    table_ref = get_table_ref(dataset_table, client=client, project_id=project_id)
     table = bigquery.Table(table_ref, schema=schema)
-
-    if table_config:
-    # Partitioning
-        if 'partition' in table_config:
-            table.time_partitioning = bigquery.TimePartitioning(
-                type_=getattr(bigquery.TimePartitioningType, table_config['partition']['type']),
-                field=table_config['partition']['field'],
-            )
-
-        # Clustering
-        if 'clustering' in table_config:
-            table.clustering_fields = table_config['clustering']
-
+    if partition_config:
+        table.time_partitioning = create_time_partitioning(partition_config)
+    if clustering:
+        table.clustering_fields = clustering
     try:
         client.create_table(table)
-        logger.info(f'Created table {dataset_table}')
+        logger.info(f'Created table {project_id}.{dataset_table}')
     except Exception as e:
         if 'Already Exists' in str(e):
-            logger.info(f'Table {dataset_table} exists')
+            logger.info(f'Table {project_id}.{dataset_table} already exists.')
         else:
-            raise
+            raise(e)
+    return
 
-    # If we want to confirm successful creation before returning
-    if confirm_creation:
-        for _ in range(retries):
-            try:
-                client.get_table(dataset_table)
-                return dataset_table
-            except NotFound:
-                time.sleep(wait)
 
-        raise RuntimeError(f"Table {dataset_table} not found after {retries} retries")
-    return dataset_table
+def create_time_partitioning(partition_config):
+    if not partition_config:
+        return None
+    return bigquery.TimePartitioning(
+        type_=getattr(bigquery.TimePartitioningType, partition_config['type']),
+        field=partition_config['field']
+    )
 
+
+# -------------------------------------------------
+# Cleanup & Checks
+# -------------------------------------------------
+@with_client
+def delete_table(dataset_table, client=None, project_id=None):
+
+    table_ref = get_table_ref(dataset_table, client=client, project_id=project_id)
+    try:
+        client.delete_table(table_ref)
+        logger.info(f'Deleted table {project_id}.{dataset_table}')
+    except Exception as e:
+        if 'Not found' not in str(e):
+            raise (e)
+        else:
+            logger.info(f'Table {project_id}.{dataset_table} not found, could not delete')
+    return
+
+@with_client
+def table_exists(dataset_table, retries=5, wait=2,
+                 client=None, project_id=None):
+    for _ in range(retries):
+        try:
+            client.get_table(dataset_table)
+            return dataset_table
+        except NotFound:
+            time.sleep(wait)
+    return False
+
+# -------------------------------------------------
+# Helpers
+# -------------------------------------------------
+@with_client
+def get_table_ref(dataset_table, client=None, project_id=None):
+    dataset_id, table_id = dataset_table.split('.')
+    table_ref = client.dataset(dataset_id).table(table_id)
+    return table_ref
+
+@with_client
+def get_dataset_ref(resource_id, client=None, project_id=None):
+    if '.' in resource_id:
+        dataset_id, _ = resource_id.split('.')
+    else:
+        dataset_id = resource_id
+    dataset_ref = client.dataset(dataset_id)
+    return dataset_ref
 
 # -------------------------------------------------
 # Data Manipulation and Loading

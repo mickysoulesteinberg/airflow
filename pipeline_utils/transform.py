@@ -67,12 +67,15 @@ def gcs_transform_and_store(paths, schema_config=None, table_config=None, source
     Returns new GCS URI for downstream bulk load
     '''
     logger.debug(f'gcs_transform_and_store: paths={paths}, bucket_name={bucket_name}, new_dir={new_dir}, new_file_name={new_file_name}')
-    schema_config = schema_config or table_config.get('schema')
+    
+    if table_config:
+        schema_config = schema_config or table_config.get('schema')
+        source_type = source_type or table_config.get('source_type')
+        delimiter = delimiter or table_config.get('delimiter')
+        fieldnames = fieldnames or table_config.get('fieldnames')
+
     if not schema_config:
         raise ValueError('Schema must be provided via schema_config or table_config')
-    if not source_type and table_config:
-        # Get source type from table config if not explicitly provided
-        source_type = table_config.get('source_type')
     
     # Handle path input as single or list
     if isinstance(paths, str):
@@ -107,9 +110,6 @@ def gcs_transform_and_store(paths, schema_config=None, table_config=None, source
             transformed_records = transform_json_records(content, schema_config, context_values=context_values,
                                                         json_root=json_root)
         elif source_type in ['csv', 'txt']:
-            if table_config:
-                delimiter = table_config.get('delimiter', delimiter)
-                fieldnames = table_config.get('fieldnames', fieldnames)
             if not fieldnames:
                 logger.warning('fieldnames not provided, inferring from CSV header')
 
