@@ -1,8 +1,9 @@
 from airflow.decorators import dag, task
 from airflow.utils.dates import days_ago
 import tasks.ingest as ingestion_tasks
-from pipeline_utils.dag_helpers import make_gcs_path_factory
+from pipeline.dag_helpers import make_gcs_path_factory
 from airflow.operators.python import get_current_context
+from core.utils import join_gcs_path
 
 from core.api import get_oauth2_token
 import logging
@@ -31,7 +32,7 @@ def spotify_pipeline():
         make_prefix, make_file_name = make_gcs_path_factory(context)
         gcs_prefix = make_prefix(api, api_path)
         gcs_file_name = make_file_name(f'artist{artist_id}')
-        return f'{gcs_prefix}/{gcs_file_name}'
+        return join_gcs_path(gcs_prefix, gcs_file_name)
 
     ingestion_tasks.api_fetch_and_load(
         api = API,

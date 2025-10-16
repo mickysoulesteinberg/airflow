@@ -26,7 +26,7 @@ I wanted to create a portfolio project that illustrates:
 | Principle | Description |
 |---|---|
 | **Config‑driven** | Environment & API settings centralized in `config/settings.yaml`, read via `utils/config.py`. |
-| **Modular architecture** | Reusable modules for GCS/BigQuery (`core/`), and ETL tasks (`tasks`, `pipeline_utils`). |
+| **Modular architecture** | Reusable modules for GCS/BigQuery (`core/`), and ETL tasks (`tasks`, `pipeline`). |
 | **Dynamic DAGs** | `dags/tmdb_pipeline.py` maps tasks over years and API endpoints. |
 | **Reusable tasks and taskgroups** | Consistent API-specific parameters in `schemas/` |
 
@@ -50,7 +50,7 @@ airflow/
 ├── dags/
 │   └── tmdb_pipeline.py            # Main Airflow DAG definition
 │
-├── pipeline_utils/
+├── pipeline/
 │   └── transform.py                # JSON transformation utilities
 │
 ├── schemas/

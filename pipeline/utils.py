@@ -1,5 +1,5 @@
 from core.gcs import list_gcs_files, with_gcs_client
-from core.utils import extract_gcs_prefix, resolve_gcs_file, resolve_gcs_path
+from core.utils import extract_gcs_prefix, resolve_gcs_file, resolve_gcs_path, looks_like_file
 import logging
 import fnmatch
 
@@ -8,25 +8,29 @@ logger = logging.getLogger(__name__)
 @with_gcs_client
 def parse_gcs_input_str(input_str, client=None, project_id=None, bucket_name=None):
     '''Parses a GCS input string (path, prefix, wildcard) and returns a list of uris or paths'''
-    logger.debug(f'parse_gcs_input: input_str={input_str}')
 
     path_str, uri_str, bucket_name = resolve_gcs_file(input_str, bucket_name=bucket_name)
     logger.debug(f'Resolved gcs_input to: bucket_name={bucket_name}, path_str={path_str}, gcs_uri={uri_str}')
 
+    # If input is a single file, we're done
+    if looks_like_file(path_str) and '*' not in uri_str:
+        return [uri_str], [path_str], bucket_name
+    
     # Get prefix and list all files under it
     prefix = extract_gcs_prefix(path_str)
     logger.debug(f'Prefix for listing: {prefix}')
-    all_uris = list_gcs_files(prefix, client=client, project_id=project_id, bucket_name=bucket_name)
-    logger.debug(f'All files under prefix: {all_uris}')
+    uri_list = list_gcs_files(prefix, client=client, project_id=project_id, bucket_name=bucket_name)
+    logger.debug(f'All files under prefix: {uri_list}')
 
-    # Filter files to matching
-    uri_list = [
-        u for u in all_uris
-        if fnmatch.fnmatch(u, uri_str)
-    ]
+    # Filter files to matching for wildcard
+    if '*' in uri_str:
+        uri_list = [
+            u for u in uri_list
+            if fnmatch.fnmatch(u, uri_str)
+        ]
 
     path_list = [resolve_gcs_path(u) for u in uri_list]
-
+    logger.debug(f'path_list: {path_list}')
     return uri_list, path_list, bucket_name
 
 
@@ -65,7 +69,7 @@ def parse_gcs_input(gcs_input, client=None, project_id=None, bucket_name=None, m
         raise ValueError('gcs_input resulted in multiple buckets. Set multiple_buckets=True to allow.')
 
     # Remove duplicates
-    for bckt_name, gcs_output in buckets.items():
+    for _, gcs_output in buckets.items():
         # Sort and dedupe zipped object to ensure consistent output and aligned lists
         paired = list(zip(gcs_output['uri_list'], gcs_output['path_list']))
         deduped_sorted = sorted(set(paired))

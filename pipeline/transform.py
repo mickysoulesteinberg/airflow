@@ -1,6 +1,6 @@
 from core.gcs import load_file_from_gcs, upload_json_to_gcs, with_gcs_client, with_bucket
-from core.utils import resolve_gcs_uri
-from pipeline_utils.utils import parse_gcs_input
+from core.utils import resolve_gcs_uri, extract_gcs_prefix, join_gcs_path
+from pipeline.utils import parse_gcs_input
 import os, json, csv, logging
 from io import StringIO
 
@@ -80,11 +80,13 @@ def gcs_transform_and_store_file(path, schema_config, source_type=None, new_dir=
         raise ValueError(f'Unsupported file extension: {source_type}')
     
     # If save directory not set, get it from the input path
-    dir = '/'.join(path.split('/')[:-1])
-    save_dir = new_dir or f'{dir}/tmp'
+    if new_dir:
+        save_dir = new_dir
+    else:
+        save_dir = join_gcs_path(extract_gcs_prefix(path), 'tmp')
     # If new file name not set, generate from input file name
     save_file_name = new_file_name or os.path.basename(path).replace(f'.{source_type}', f'_transformed.{source_type}')
-    new_blob_path = f'{save_dir}/{save_file_name}'
+    new_blob_path = join_gcs_path(save_dir, save_file_name)
 
     # Write to new GCS location
     new_uri = upload_json_to_gcs(transformed_records, new_blob_path, wrap=False, new_line=True,

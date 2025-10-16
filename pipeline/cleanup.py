@@ -1,5 +1,5 @@
 from core.gcs import delete_files, with_gcs_client
-from pipeline_utils.utils import parse_gcs_input
+from pipeline.utils import parse_gcs_input
 import logging
 
 logger = logging.getLogger(__name__)

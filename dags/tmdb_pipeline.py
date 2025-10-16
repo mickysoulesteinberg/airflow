@@ -8,7 +8,7 @@ import tasks.transform as transform_tasks
 import tasks.cleanup as cleanup_tasks
 import logging
 from schemas.tmdb import MOVIES_SCHEMA, CREDITS_SCHEMA
-from pipeline_utils.dag_helpers import make_gcs_path_factory
+from pipeline.dag_helpers import make_gcs_path_factory
 
 logger = logging.getLogger(__name__)
 
@@ -144,12 +144,12 @@ def tmdb_pipeline():
 
 
 
-        gcs_uris = helper_tasks.reduce_xcoms.override(
-            task_id='reduce_xcom_gcs_uri'
+        transformed_uris = helper_tasks.reduce_xcoms.override(
+            task_id='collect_temp_uris'
         )(ingestion['gcs_uri'])
 
 
-        loaded_staging_table = loader_tasks.gcs_to_bq_stg(gcs_uris, created_staging_table)
+        loaded_staging_table = loader_tasks.gcs_to_bq_stg(transformed_uris, created_staging_table)
 
         merged_final_table = loader_tasks.bq_stg_to_final_merge(
             staging_table=loaded_staging_table,

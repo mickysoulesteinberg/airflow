@@ -2,6 +2,7 @@ def make_gcs_format_strings(context):
     '''Returns format strings which includes Dag and date context, but leaves placeholders for dynamic parts'''
     dag_id = context['dag'].dag_id
     ds_nodash = context['ds_nodash']
+
     prefix = f'{dag_id}/{{api}}/{{api_path}}'
     file_name = f'{{call_id}}-{ds_nodash}.json'
     return {'prefix': prefix, 'file_name': file_name}

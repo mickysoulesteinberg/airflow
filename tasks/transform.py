@@ -1,6 +1,6 @@
 from airflow.decorators import task
-from pipeline_utils.transform import gcs_transform_and_store
-from pipeline_utils.utils import parse_gcs_input
+from pipeline.transform import gcs_transform_and_store
+from pipeline.utils import parse_gcs_input
 import logging
 
 logger = logging.getLogger(__name__)

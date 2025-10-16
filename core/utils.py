@@ -3,6 +3,51 @@ import logging, textwrap
 
 logger = logging.getLogger(__name__)
 
+def looks_like_file(path_str):
+    if path_str.endswith('/'):
+        return False
+    if '.' in path_str.split('/')[-1]:
+        return True
+    return False
+
+def join_gcs_path(*parts, sep='/', force_file=False):
+    '''
+    Joins parts into a normalized GCS path or URI.
+    
+    Features:
+      - Handles inputs like 'gs://bucket', 'folder/', '/subfolder', 'file.json'
+      - Prevents duplicate slashes
+      - Adds trailing '/' if it looks like a folder (no file extension)
+      - Optional force_file=True disables trailing slash
+
+    E.g.
+        join_gcs_path('folder/', '/subfolder', 'file.ext') -> 'folder/subfolder/file.ext'
+        join_gcs_path('data', '2025') -> 'data/2025/'
+        join_gcs_path('gs://my-bucket', 'movies', '2025', 'data.json') -> 'gs://my-bucket/movies/2025/data.json'
+    '''
+
+    # Flatten and clean all parts
+    cleaned = []
+    for p in parts:
+        if p:
+            if not isinstance(p, str):
+                logger.warning(f'Input non-string value {p}, skipping input.')
+            else:
+                part = p.strip(sep)
+                cleaned.append(part)
+
+    if not cleaned:
+        return ''
+
+    path = sep.join(cleaned).rstrip('/')
+
+    # Add trailing slash if it looks like a folder and not forced as file
+    if not force_file and '.' not in path.split(sep)[-1]:
+        path += sep
+
+    return path
+
+
 def split_gcs_uri(uri):
     '''Return (bucket, path) tuple from a GCS URI'''
     if not uri.startswith('gs://'):

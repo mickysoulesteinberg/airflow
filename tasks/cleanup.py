@@ -1,6 +1,6 @@
 from airflow.decorators import task
-from core.gcs import delete_gcs_folder
-from pipeline_utils.cleanup import delete_gcs_files
+from core.gcs import delete_gcs_prefix
+from pipeline.cleanup import delete_gcs_files
 
 @task
 def delete_gcs_tmp_folder(tmp_folder_path, wait_for=None):
@@ -8,17 +8,17 @@ def delete_gcs_tmp_folder(tmp_folder_path, wait_for=None):
     Deletes a GCS folder and all its contents. 
     Use wait_for to ensure this task runs after other tasks.
     '''
-    delete_gcs_folder(tmp_folder_path)
+    delete_gcs_prefix(tmp_folder_path)
     return
 
 @task
-def delete_gcs_tmp_files(gcs_input, wait_for=None):
+def delete_gcs_tmp_files(gcs_input, wait_for=None, bucket_name=None):
     '''
     Deletes GCS files.
     gcs_input can be a single path, a list of paths, a prefix, or a wildcard pattern.
     Use wait_for to ensure this task runs after other tasks.
     '''
-    delete_gcs_files(gcs_input)
+    delete_gcs_files(gcs_input, bucket_name=bucket_name)
     return
 
 @task

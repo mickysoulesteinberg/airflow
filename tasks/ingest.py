@@ -2,6 +2,7 @@ from airflow.decorators import task
 import logging, jmespath
 from core.api import api_get
 from core.gcs import upload_json_to_gcs
+from core.utils import join_gcs_path
 
 
 logger = logging.getLogger(__name__)
@@ -38,7 +39,7 @@ def api_fetch_and_load(api=None, api_path=None, api_args=None,
 
     # Build GCS path if necessary
     if gcs_path is None and gcs_prefix and gcs_file_name:
-        gcs_path = f'{gcs_prefix.rstrip("/")}/{gcs_file_name.lstrip("/")}'
+        gcs_path = join_gcs_path(gcs_prefix, gcs_file_name)
 
     # Upload to GCS if path provided
     if gcs_path:

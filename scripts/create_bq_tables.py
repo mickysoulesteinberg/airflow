@@ -1,4 +1,4 @@
-from pipeline_utils.create_table import create_table_from_config
+from pipeline.create_table import create_table_from_config
 from schemas import ALL_TABLES
 
 if __name__ == '__main__':

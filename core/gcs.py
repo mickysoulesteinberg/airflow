@@ -144,14 +144,14 @@ def delete_files(paths, client=None, project_id=None, bucket=None, bucket_name=N
     return
 
 @with_bucket
-def delete_gcs_folder(folder_path, client=None, project_id=None, bucket=None, bucket_name=None):
+def delete_gcs_prefix(prefix, client=None, project_id=None, bucket=None, bucket_name=None):
     '''Deletes all blobs under a GCS folder path'''
-    blobs = bucket.list_blobs(prefix=folder_path)
+    blobs = bucket.list_blobs(prefix=prefix)
     deleted = 0
     for blob in blobs:
         blob.delete()
         deleted += 1
-    logger.info(f'Deleted {deleted} blobs from gs://{bucket_name}/{folder_path}')
+    logger.info(f'Deleted {deleted} blobs from gs://{bucket_name}/{prefix}')
     return
 
 

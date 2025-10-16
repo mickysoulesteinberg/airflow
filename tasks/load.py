@@ -2,7 +2,7 @@ from airflow.decorators import task
 from core.bq import bq_merge, load_all_gcs_to_bq
 import logging
 
-from pipeline_utils.create_table import create_table_from_config
+from pipeline.create_table import create_table_from_config
 
 logger = logging.getLogger(__name__)
 
