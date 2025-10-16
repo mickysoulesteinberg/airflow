@@ -1,10 +1,10 @@
 from airflow.decorators import dag, task_group, task
 from airflow.utils.dates import days_ago
 from airflow.operators.python import get_current_context
-import tasks.ingestion as ingestion_tasks
-import tasks.loaders as loader_tasks
-import tasks.helpers as helper_tasks
-import tasks.transforms as transform_tasks
+import tasks.ingest as ingestion_tasks
+import tasks.load as loader_tasks
+import tasks.utils as helper_tasks
+import tasks.transform as transform_tasks
 import tasks.cleanup as cleanup_tasks
 import logging
 from schemas.tmdb import MOVIES_SCHEMA, CREDITS_SCHEMA

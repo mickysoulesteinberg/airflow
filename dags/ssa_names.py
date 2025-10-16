@@ -1,8 +1,8 @@
 from airflow.decorators import dag
 from airflow.utils.dates import days_ago
 import logging
-import tasks.loaders as loader_tasks
-import tasks.transforms as transform_tasks
+import tasks.load as loader_tasks
+import tasks.transform as transform_tasks
 import tasks.cleanup as cleanup_tasks
 from schemas.ssa import NAMES_SCHEMA
 
