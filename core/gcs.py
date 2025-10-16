@@ -1,8 +1,7 @@
 from google.cloud import storage
-import json, logging, fnmatch
+import json, logging
 from contextlib import contextmanager
 from core.env import resolve_project, resolve_bucket
-from core.utils import resolve_gcs_file, extract_gcs_prefix, resolve_gcs_path
 
 logger = logging.getLogger(__name__)
 
@@ -138,9 +137,10 @@ def list_gcs_files(prefix, client=None, project_id=None, bucket=None, bucket_nam
 # Deleting
 # -------------------------------------------------
 @with_bucket
-def delete_gcs_file(path, client=None, project_id=None, bucket=None, bucket_name=None):
-    blob = bucket.blob(path)
-    blob.delete()
+def delete_files(paths, client=None, project_id=None, bucket=None, bucket_name=None):
+    for path in paths:
+        blob = bucket.blob(path)
+        blob.delete()
     return
 
 @with_bucket
@@ -155,36 +155,4 @@ def delete_gcs_folder(folder_path, client=None, project_id=None, bucket=None, bu
     return
 
 
-
-# -------------------------------------------------
-# Formatting
-# -------------------------------------------------
-@with_gcs_client
-def parse_gcs_input(input_str, client=None, project_id=None, bucket_name=None, return_type='uri'):
-    '''Parses a GCS input string (path, prefix, wildcard) and returns a list of uris'''
-    logger.debug(f'parse_gcs_input: input_str={input_str}')
-
-    if return_type not in ['uri', 'path']:
-        raise ValueError('return_type must be "uri" or "path"')
-    
-    path_str, uri_str, bucket_name = resolve_gcs_file(input_str, bucket_name=bucket_name)
-    logger.debug(f'Resolved gcs_input to: bucket_name={bucket_name}, path_str={path_str}, gcs_uri={uri_str}')
-
-    # Get prefix and list all files under it
-    prefix = extract_gcs_prefix(path_str)
-    logger.debug(f'Prefix for listing: {prefix}')
-    all_uris = list_gcs_files(prefix, client=client, project_id=project_id, bucket_name=bucket_name)
-    logger.debug(f'All files under prefix: {all_uris}')
-
-    # Filter files to matching
-    uri_list = [
-        u for u in all_uris
-        if fnmatch.fnmatch(u, uri_str)
-    ]
-
-    if return_type == 'uri':
-        return uri_list
-    else:
-        return [resolve_gcs_path(u) for u in uri_list]
-    
 

@@ -1,5 +1,5 @@
 from core.env import resolve_bucket
-import logging
+import logging, textwrap
 
 logger = logging.getLogger(__name__)
 
@@ -60,4 +60,36 @@ def extract_gcs_prefix(input_str):
     if '/' in path_str:
         return path_str.rsplit('/', 1)[0] + '/'
     return ''
+
+
+def format_stage_merge_query(staging_table, final_table, schema, merge_cols):
+    schema_cols = [col['name'] for col in schema]
+
+    # Define clauses
+    on_clause = ' AND '.join([f'F.`{col}` = S.`{col}`' for col in merge_cols])
+    update_clause = ',\n    '.join([
+        'F.`last_updated` = CURRENT_TIMESTAMP()' if col == 'last_updated'
+        else f'F.`{col}` = S.`{col}`'
+        for col in schema_cols
+        if col not in merge_cols
+    ])
+    insert_cols = ', '.join([f'`{col}`' for col in schema_cols])
+    values_clause = ', '.join([
+        'CURRENT_TIMESTAMP()' if col == 'last_updated'
+        else f'S.`{col}`'
+        for col in schema_cols
+    ])
+
+    # Construct query
+    query = f'''
+    MERGE `{final_table}` F
+    USING `{staging_table}` S
+    ON {on_clause}
+    WHEN MATCHED THEN UPDATE SET
+        {update_clause}
+    WHEN NOT MATCHED THEN INSERT ({insert_cols})
+    VALUES ({values_clause});
+    '''
+
+    return textwrap.dedent(query).strip()
     

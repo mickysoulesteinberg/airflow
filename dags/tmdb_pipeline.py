@@ -66,14 +66,14 @@ API_CONFIG = {
 def tmdb_pipeline():
     
     @task(multiple_outputs=True)
-    def setup_api_call(api_arg_builder, gcs_prefix, **kwargs):
+    def setup_api_call(api_arg_builder, **kwargs):
         api_call_dict = api_arg_builder(**kwargs)
         context = get_current_context()
         _, make_gcs_file_name = make_gcs_path_factory(context)
-        gcs_path = f'{gcs_prefix}/{make_gcs_file_name(api_call_dict['call_id'])}'
+        gcs_file_name = make_gcs_file_name(api_call_dict['call_id'])
         api_args = api_call_dict['api_args']
         return_data = api_call_dict.get('return_data')
-        return {'gcs_path': gcs_path, 'api_args': api_args, 'return_data': return_data}
+        return {'gcs_file_name': gcs_file_name, 'api_args': api_args, 'return_data': return_data}
 
     @task_group
     def api_ingestion_iterate(api, api_path, table_config, json_root, gcs_folders,
@@ -81,17 +81,17 @@ def tmdb_pipeline():
     
         gcs_prefix = gcs_folders['gcs_prefix']
 
-        task_builder = setup_api_call(api_arg_builder, gcs_prefix, **api_kwargs)
+        task_builder = setup_api_call(api_arg_builder, **api_kwargs)
         api_args = task_builder['api_args']
-        gcs_path = task_builder['gcs_path']
+        gcs_file_name = task_builder['gcs_file_name']
         return_data = task_builder['return_data']
 
-        fetched = ingestion_tasks.api_fetch_and_load(
-            api=api, api_path=api_path, api_args=api_args, gcs_path=gcs_path,
-            return_data=return_data
-        )
+        fetched = ingestion_tasks.api_fetch_and_load(api=api, api_path=api_path, api_args=api_args, 
+                                                     gcs_prefix=gcs_prefix, gcs_file_name=gcs_file_name,
+                                                     return_data=return_data)
+        loaded_gcs_path = fetched['gcs_path']
 
-        transformed_uris = transform_tasks.gcs_transform_for_bigquery(gcs_path, table_config, json_root=json_root)
+        transformed_uris = transform_tasks.gcs_transform_for_bigquery(loaded_gcs_path, table_config, json_root=json_root)
 
         fetched >> transformed_uris
 
@@ -101,7 +101,7 @@ def tmdb_pipeline():
     
 
     @task(multiple_outputs=True)
-    def create_gcs_folder_paths(api, api_path):
+    def create_gcs_prefixes(api, api_path):
         context = get_current_context()
 
         make_gcs_prefix, _ = make_gcs_path_factory(context)
@@ -116,15 +116,18 @@ def tmdb_pipeline():
         api_config = API_CONFIG[api_call]
         api = api_config['api']
         api_path = api_config['api_path']
+        staging_table = api_config['staging_table']
+        final_table = api_config['final_table']
 
-        gcs_folders = create_gcs_folder_paths(api, api_path)
+        gcs_folders = create_gcs_prefixes(api, api_path)
+        gcs_temp_prefix = gcs_folders['gcs_tmp_prefix']
 
         table_config = api_config['table_config']
         bq_schema_config = table_config['schema']
 
         # Task: Create empty staging table in BigQuery
-        staging_table = loader_tasks.create_staging_table(
-            dataset_table=api_config['staging_table'],
+        created_staging_table = loader_tasks.create_staging_table(
+            dataset_table=staging_table,
             schema_config=bq_schema_config
         )
 
@@ -135,7 +138,6 @@ def tmdb_pipeline():
             return_keys=return_keys,
             table_config=table_config,
             api_arg_builder=api_config['api_arg_builder'],
-            staging_table=staging_table,
             json_root=api_config['json_root'],
             gcs_folders=gcs_folders
         ).expand(**kwargs)
@@ -147,18 +149,17 @@ def tmdb_pipeline():
         )(ingestion['gcs_uri'])
 
 
-        stage = loader_tasks.gcs_to_bq_stg(gcs_uris, staging_table)
+        loaded_staging_table = loader_tasks.gcs_to_bq_stg(gcs_uris, created_staging_table)
 
-        merge = loader_tasks.bq_stg_to_final_merge(
-            staging_table=staging_table,
-            final_table=api_config['final_table'],
+        merged_final_table = loader_tasks.bq_stg_to_final_merge(
+            staging_table=loaded_staging_table,
+            final_table=final_table,
             schema=bq_schema_config,
             merge_cols=table_config['row_id']
         )
 
-        cleanup = cleanup_tasks.delete_gcs_tmp_folder(gcs_folders['gcs_tmp_prefix'])
-
-        stage >> merge >> cleanup
+        cleanup_tasks.delete_gcs_tmp_folder(gcs_temp_prefix, wait_for=loaded_staging_table)
+        cleanup_tasks.delete_bq_staging_table(loaded_staging_table, wait_for=merged_final_table)
 
         returned_data = {}
         for key in return_keys:

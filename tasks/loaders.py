@@ -16,9 +16,10 @@ def bq_stg_to_final_merge(schema, staging_table, final_table, merge_cols):
                  force_recreate=False, confirm_creation=True)
 
     # Perform merge
-    bq_merge(schema=schema, merge_cols=merge_cols, 
+    final_table = bq_merge(schema=schema, merge_cols=merge_cols, 
              staging_table=staging_table, final_table=final_table)
-    return
+    
+    return final_table
 
 @task
 def create_staging_table(dataset_table, schema_config):
@@ -28,5 +29,6 @@ def create_staging_table(dataset_table, schema_config):
     return staging_table
 
 @task
-def gcs_to_bq_stg(gcs_uris, dataset_table):
-    return load_all_gcs_to_bq(gcs_uris, dataset_table)
+def gcs_to_bq_stg(gcs_uris, staging_table):
+    loaded_staging_table = load_all_gcs_to_bq(gcs_uris, staging_table)
+    return loaded_staging_table
