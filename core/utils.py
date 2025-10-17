@@ -1,7 +1,8 @@
 from core.env import resolve_bucket
-import logging, textwrap
+import textwrap
+from core.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def looks_like_file(path_str):
     if path_str.endswith('/'):
@@ -96,15 +97,24 @@ def extract_gcs_prefix(input_str):
         'folder/subfolder/*.json' -> 'folder/subfolder'
         'folder/subfolder/file.json' -> 'folder/subfolder'
         'folder/*/subfolder/' -> 'folder'
+        'folder/subfolder/string*.json' -> 'folder/subfolder'
     '''
     path_str = resolve_gcs_path(input_str)
+    logger.trace(f'path str resolved to {path_str}')
 
     if '*' in path_str:
-        # Wildcard present, return portion before first wildcard
-        path_str = path_str.split('*')[0]
-    if '/' in path_str:
-        return path_str.rsplit('/', 1)[0] + '/'
-    return ''
+        # Portion before first wildcard, trimmed to the last full directory
+        before_star = path_str.split('*', 1)[0]
+        prefix = before_star.rsplit('/', 1)[0] if '/' in before_star else ''
+    elif looks_like_file(path_str):
+        # Strip filename if it looks like a file
+        prefix = path_str.rsplit('/', 1)[0] if '/' in path_str else ''
+    else:
+        # Already a directory; just normalize
+        prefix = path_str.rstrip('/')
+
+    logger.debug(f'input string: {input_str}, extracted prefix: {prefix}')
+    return prefix
 
 
 def format_stage_merge_query(staging_table, final_table, schema, merge_cols):

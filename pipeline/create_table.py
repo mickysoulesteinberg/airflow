@@ -1,7 +1,7 @@
 from core.bq import create_dataset, delete_table, table_exists, with_client, create_table
-import logging
+from core.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 @with_client
 def create_table_from_config(dataset_table,

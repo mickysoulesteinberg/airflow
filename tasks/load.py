@@ -1,10 +1,10 @@
 from airflow.decorators import task
 from core.bq import bq_merge, load_all_gcs_to_bq
-import logging
+from core.logger import get_logger
 
 from pipeline.create_table import create_table_from_config
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 @task
 def bq_stg_to_final_merge(schema, staging_table, final_table, merge_cols):

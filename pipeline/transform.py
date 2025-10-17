@@ -1,10 +1,11 @@
 from core.gcs import load_file_from_gcs, upload_json_to_gcs, with_gcs_client, with_bucket
 from core.utils import resolve_gcs_uri, extract_gcs_prefix, join_gcs_path
 from pipeline.utils import parse_gcs_input
-import os, json, csv, logging
+import os, json, csv
 from io import StringIO
+from core.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def transform_record(record, schema_config, context_values=None):
     context_values = context_values or {}
@@ -32,7 +33,7 @@ def transform_csv_records(content, schema_config, context_values=None, delimiter
     delimiter = delimiter or ','
     reader = csv.DictReader(StringIO(content), fieldnames=fieldnames, delimiter=delimiter)
     csv_data = list(reader)
-    logger.debug(f'csv_data sample: {csv_data[:2]}')
+    logger.trace(f'csv_data sample: {csv_data[:2]}')
 
     rows = [transform_record(record, schema_config, context_values=context_values) for record in csv_data]
     return rows

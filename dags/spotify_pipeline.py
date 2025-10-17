@@ -6,9 +6,9 @@ from airflow.operators.python import get_current_context
 from core.utils import join_gcs_path
 
 from core.api import get_oauth2_token
-import logging
+from core.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 ARTIST_ID = '06HL4z0CvFAxyc27GXpf02'  # Taylor Swift's Spotify Artist ID
 API = 'spotify'

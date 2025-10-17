@@ -1,11 +1,12 @@
-import os, requests, logging, time
+import os, requests, time
 from utils.config import CONFIG
+from core.logger import get_logger
 
 # Get the configuration settings for APIs
 API_CONFIG = CONFIG['apis']
 
 # Configure logger
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Get token for OAuth
 def get_oauth2_token(api):
@@ -103,7 +104,7 @@ def api_get(api, path, path_vars = None, params = None, token_data = None, refre
     headers = {headers}
     params = {params}
     '''
-    logger.debug(log_string)
+    logger.verbose(log_string)
 
     # Call API
     r = requests.get(url, headers = headers, params = params)

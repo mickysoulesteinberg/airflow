@@ -1,8 +1,8 @@
 import os
-import logging
+from core.logger import get_logger
 from utils.config import CONFIG
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # These will be used by both BQ and GCS modules
 DEFAULT_PROJECT_ID = os.getenv('GCP_PROJECT_ID')

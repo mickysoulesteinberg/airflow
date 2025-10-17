@@ -1,9 +1,9 @@
 from core.gcs import list_gcs_files, with_gcs_client
 from core.utils import extract_gcs_prefix, resolve_gcs_file, resolve_gcs_path, looks_like_file
-import logging
+from core.logger import get_logger
 import fnmatch
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 @with_gcs_client
 def parse_gcs_input_str(input_str, client=None, project_id=None, bucket_name=None):
@@ -18,9 +18,9 @@ def parse_gcs_input_str(input_str, client=None, project_id=None, bucket_name=Non
     
     # Get prefix and list all files under it
     prefix = extract_gcs_prefix(path_str)
-    logger.debug(f'Prefix for listing: {prefix}')
+    logger.trace(f'Prefix for listing: {prefix}')
     uri_list = list_gcs_files(prefix, client=client, project_id=project_id, bucket_name=bucket_name)
-    logger.debug(f'All files under prefix: {uri_list}')
+    logger.trace(f'All files under prefix: {uri_list}')
 
     # Filter files to matching for wildcard
     if '*' in uri_str:
@@ -30,7 +30,7 @@ def parse_gcs_input_str(input_str, client=None, project_id=None, bucket_name=Non
         ]
 
     path_list = [resolve_gcs_path(u) for u in uri_list]
-    logger.debug(f'path_list: {path_list}')
+    logger.trace(f'path_list: {path_list}')
     return uri_list, path_list, bucket_name
 
 

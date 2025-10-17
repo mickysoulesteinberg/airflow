@@ -1,9 +1,10 @@
 from google.cloud import storage
-import json, logging
+import json
 from contextlib import contextmanager
 from core.env import resolve_project, resolve_bucket
+from core.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # -------------------------------------------------
 # Manage Storage Client
@@ -16,7 +17,7 @@ def get_gcs_client(project_id=None):
     If project_id is None, defaults from environment/credentials
     '''
     project_id = resolve_project(project_id)
-    logger.debug(f'Creating new client (project_id: {project_id})')
+    logger.info(f'Creating new client (project_id: {project_id})')
     return storage.Client(project=project_id)
 
 # Explicitly manage client lifecycle
@@ -45,7 +46,7 @@ def with_gcs_client(func):
       - Neither is passed (falls back to env vars)
     '''
     def wrapper(*args, client=None, project_id=None, **kwargs):
-        logger.debug(f'with_bucket: client={"yes" if client else "no"}')
+        logger.trace(f'with_bucket: client={"yes" if client else "no"}')
 
         # If client is passed, create the bucket and populate other arguments
         if client:
@@ -67,7 +68,7 @@ def with_bucket(func):
       - Neither is passed (falls back to env vars)
     '''
     def wrapper(*args, client=None, project_id=None, bucket=None, bucket_name=None, **kwargs):
-        logger.debug(f'with_bucket: client={"yes" if client else "no"}, bucket={"yes" if bucket else "no"}')
+        logger.trace(f'with_bucket: client={"yes" if client else "no"}, bucket={"yes" if bucket else "no"}')
 
         # If bucket is passed, populate arguments with correct values
         if bucket:

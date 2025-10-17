@@ -6,11 +6,11 @@ import tasks.load as loader_tasks
 import tasks.utils as helper_tasks
 import tasks.transform as transform_tasks
 import tasks.cleanup as cleanup_tasks
-import logging
+from core.logger import get_logger
 from schemas.tmdb import MOVIES_SCHEMA, CREDITS_SCHEMA
 from pipeline.dag_helpers import make_gcs_path_factory
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ----- DAG PARAMS
 # -----
@@ -158,13 +158,13 @@ def tmdb_pipeline():
             merge_cols=table_config['row_id']
         )
 
-        cleanup_tasks.delete_gcs_tmp_folder(gcs_temp_prefix, wait_for=loaded_staging_table)
+        cleanup_tasks.delete_gcs_tmp_files(gcs_temp_prefix, wait_for=loaded_staging_table)
         cleanup_tasks.delete_bq_staging_table(loaded_staging_table, wait_for=merged_final_table)
 
         returned_data = {}
         for key in return_keys:
             returned_data[key] = helper_tasks.reduce_xcoms.override(
-                task_id=f'reduce_xcom_{key}'
+                task_id=f'collect_{key}'
             )(ingestion[key])
 
         return returned_data
@@ -177,7 +177,7 @@ def tmdb_pipeline():
         year=YEARS
     )['movie_ids']
     
-    # api_ingestion.override(group_id='credits')('credits', movie_id=movie_ids)
+    api_ingestion.override(group_id='credits')('credits', movie_id=movie_ids)
 
 
 

@@ -1,11 +1,11 @@
 from google.cloud import bigquery
-import logging, time
+import time
 from contextlib import contextmanager
 from core.env import resolve_project
 from core.utils import format_stage_merge_query
 from google.api_core.exceptions import NotFound
-
-logger = logging.getLogger(__name__)
+from core.logger import get_logger
+logger = get_logger(__name__)
 
 # -------------------------------------------------
 # Manage BigQuery Client
@@ -18,7 +18,7 @@ def get_bq_client(project_id=None):
     If project_id is None, defaults from environment/credentials.
     '''
     project_id = resolve_project(project_id)
-    logger.debug(f'Creating BigQuery client (project_id: {project_id})')
+    logger.info(f'Creating BigQuery client (project_id: {project_id})')
     return bigquery.Client(project=project_id)
 
 
@@ -161,7 +161,7 @@ def bq_merge(schema, merge_cols, staging_table, final_table, client=None, projec
         schema=schema,
         merge_cols=merge_cols,
     )
-    logger.debug(f'''QUERY = {query}''')
+    logger.trace(f'''QUERY = {query}''')
     client.query(query).result()
     return final_table
 

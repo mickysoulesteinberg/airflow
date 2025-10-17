@@ -1,11 +1,12 @@
 from airflow.decorators import task
-import logging, jmespath
+import jmespath
 from core.api import api_get
 from core.gcs import upload_json_to_gcs
 from core.utils import join_gcs_path
+from core.logger import get_logger
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @task(multiple_outputs=True)

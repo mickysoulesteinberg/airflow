@@ -1,12 +1,12 @@
 from airflow.decorators import dag
 from airflow.utils.dates import days_ago
-import logging
+from core.logger import get_logger
 import tasks.load as loader_tasks
 import tasks.transform as transform_tasks
 import tasks.cleanup as cleanup_tasks
 from schemas.ssa import NAMES_SCHEMA
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 DAG_CONFIG = {
     'names': {
@@ -53,5 +53,5 @@ def ssa_names():
     )
 
     cleanup_tasks.delete_gcs_tmp_files(gcs_tmp_dir, bucket_name=gcs_bucket, wait_for=loaded_staging_table)
-
+    
 ssa_names()
