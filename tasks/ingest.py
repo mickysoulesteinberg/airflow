@@ -1,17 +1,17 @@
 from airflow.decorators import task
 import jmespath
 from core.api import api_get
-from core.gcs import upload_json_to_gcs
+from pipeline.ingest import upload_json_to_gcs
 from core.utils import join_gcs_path
 from core.logger import get_logger
 
 
 logger = get_logger(__name__)
 
-
 @task(multiple_outputs=True)
 def api_fetch_and_load(api=None, api_path=None, api_args=None, 
                        gcs_path=None, gcs_prefix=None, gcs_file_name=None,
+                       bucket_override=None,
                        return_data=None, api_call_dict=None):
     """
     Fetch data from an API and optionally upload to GCS.
@@ -44,7 +44,7 @@ def api_fetch_and_load(api=None, api_path=None, api_args=None,
 
     # Upload to GCS if path provided
     if gcs_path:
-        upload_json_to_gcs(data, gcs_path)
+        upload_json_to_gcs(data, gcs_path, bucket_override=bucket_override)
         return_dict['gcs_path'] = gcs_path
 
     # Get data to return if requested

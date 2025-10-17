@@ -158,7 +158,6 @@ def tmdb_pipeline():
             merge_cols=table_config['row_id']
         )
 
-        cleanup_tasks.delete_gcs_tmp_files(gcs_temp_prefix, wait_for=loaded_staging_table)
         cleanup_tasks.delete_bq_staging_table(loaded_staging_table, wait_for=merged_final_table)
 
         returned_data = {}

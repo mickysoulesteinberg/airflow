@@ -1,4 +1,4 @@
-from core.env import resolve_bucket
+from core.env import resolve_default_bucket
 import textwrap
 from core.logger import get_logger
 
@@ -73,7 +73,7 @@ def resolve_gcs_file(gcs_input, bucket_name=None):
             raise ValueError(f'Bucket name in gcs_input ({uri_bucket}) does not match provided bucket_name ({bucket_name})')
         bucket_name = uri_bucket
     else:
-        bucket_name = resolve_bucket(bucket_name)
+        bucket_name = resolve_default_bucket(bucket_name)
         gcs_path = gcs_input
         gcs_uri = f'gs://{bucket_name}/{gcs_path.lstrip("/")}'
     return gcs_path, gcs_uri, bucket_name

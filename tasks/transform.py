@@ -1,6 +1,5 @@
 from airflow.decorators import task
 from pipeline.transform import gcs_transform_and_store
-from pipeline.utils import parse_gcs_input
 from core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -8,7 +7,7 @@ logger = get_logger(__name__)
 
 @task
 def gcs_transform_for_bigquery(gcs_input, table_config, json_root=None, delimiter=None,
-                               bucket_name=None, new_dir=None):
+                               source_bucket=None, new_dir=None):
     '''
     Transforms raw data in GCS to a format suitable for loading
     into BigQuery, and writes the transformed data back to a temporary
@@ -24,7 +23,7 @@ def gcs_transform_for_bigquery(gcs_input, table_config, json_root=None, delimite
     # Perform transformation and write to the new GCS location
     transformed_uris = gcs_transform_and_store(gcs_input, table_config=table_config,
                                                json_root=json_root, delimiter=delimiter,
-                                               bucket_name=bucket_name, new_dir=new_dir)
+                                               new_dir=new_dir, source_bucket_override=source_bucket)
 
 
     return transformed_uris

@@ -29,6 +29,8 @@ tmdb: &tmdb_defaults
 environments:
   dev:
     gcs_bucket: airflow-tidal-mason-dev
+    airflow_raw_bucket: airflow-raw-data
+    airflow_tmp_bucket: airflow-tidal-tmp
     apis:
       spotify:
         <<: *spotify_defaults

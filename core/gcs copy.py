@@ -1,8 +1,8 @@
 from google.cloud import storage
+import json
 from contextlib import contextmanager
-from core.env import resolve_project
+from core.env import resolve_project, resolve_default_bucket
 from core.logger import get_logger
-from core.utils import resolve_gcs_uri
 
 logger = get_logger(__name__)
 
@@ -29,13 +29,12 @@ def gcs_client_context(project_id=None):
         with gcs_client_context('my-project') as client:
             ...
     '''
-    logger.trace(f'Initializing Client for Project {project_id}.')
     client = get_gcs_client(project_id=project_id)
     try:
         yield client
     finally:
-        logger.trace(f'Closing Client for Project {project_id}.')
         client.close()
+
 
 # Decorator wraps functions for Airflow
 def with_gcs_client(func):
@@ -47,11 +46,9 @@ def with_gcs_client(func):
       - Neither is passed (falls back to env vars)
     '''
     def wrapper(*args, client=None, project_id=None, **kwargs):
-        logger.debug(f'with_client: client=%s, project_id=%s',
-                     'yes' if client else 'no',
-                     project_id or 'none')
+        logger.trace(f'with_bucket: client={"yes" if client else "no"}')
 
-        # If client is passed, populate project_id
+        # If client is passed, create the bucket and populate other arguments
         if client:
             return func(*args, client=client, project_id = client.project, **kwargs)
 
@@ -61,97 +58,95 @@ def with_gcs_client(func):
 
     return wrapper
 
+# Decorator wraps functions for Airflow
 def with_bucket(func):
     '''
-    Decorator that ensures both `bucket` and `bucket_name` are resolved.
-    Requires a valid GCS client (typically injected via @with_gcs_client);
-    does not create or manage clients itself.
+    Decorator that injects a managed GCS client, project_id, and bucket.
+    Handles cases where:
+      - A full bucket object is passed (infers client + project)
+      - Only a bucket name is passed
+      - Neither is passed (falls back to env vars)
     '''
-    def wrapper(*args, client=None, bucket=None, bucket_name=None, **kwargs):
-
-        logger.debug('with_bucket: bucket=%s, bucket_name=%s',
-                    'yes' if bucket else 'no',
-                    bucket_name or 'none')
+    def wrapper(*args, client=None, project_id=None, bucket=None, bucket_name=None, **kwargs):
+        logger.trace(f'with_bucket: client={"yes" if client else "no"}, bucket={"yes" if bucket else "no"}')
 
         # If bucket is passed, populate arguments with correct values
         if bucket:
-            if not hasattr(bucket, 'name'):
-                raise TypeError('Invalid bucket object passed to with_bucket')
             client = bucket.client
-            if bucket_name and bucket_name != bucket.name:
-                logger.warning(f'with_bucket: bucket_name argument ({bucket_name}) does not match bucket.name ({bucket.name}). Using bucket.name.')
-            bucket_name = bucket.name
-            logger.trace(f'bucket_name generated: {bucket_name}')
+            return func(*args, client=client, project_id=client.project,
+                        bucket=bucket, bucket_name=bucket.name, **kwargs)
 
-        # Otherwise use client and bucket_name to generate bucket
-        elif bucket_name:
-            if not client:
-                raise ValueError('with_bucket requires a valid GCS client')
+        # Otherwise, if client is passed, create the bucket and populate other arguments
+        if client:
+            bucket_name = resolve_default_bucket(bucket_name)
             bucket = client.bucket(bucket_name)
-            logger.trace(f'bucket {bucket_name} initialized.')
-        
-        else:
-            raise ValueError('with_bucket requires either `bucket` or `bucket_name` argument')
+            return func(*args, client=client, project_id = client.project,
+                        bucket=bucket, bucket_name=bucket_name, **kwargs)
 
-        return func(*args, client=client, bucket=bucket, bucket_name=bucket_name, **kwargs)
+        # Otherwise, manage client lifecycle and create bucket
+        with gcs_client_context(project_id) as managed_client:
+            bucket_name = resolve_default_bucket(bucket_name)
+            bucket = managed_client.bucket(bucket_name)
+            return func(*args, client=managed_client, project_id=managed_client.project,
+                        bucket=bucket, bucket_name=bucket_name, **kwargs)
 
     return wrapper
+
 
 # -------------------------------------------------
 # Uploading
 # -------------------------------------------------
+
 @with_bucket
-@with_gcs_client
-def upload_from_string(data, path, content_type='application/json',
-                       client=None, project_id=None, bucket=None, bucket_name=None):
-    logger.debug(f'Uploading data to {path}')
-    logger.trace(f'data = {data}')
+def upload_json_to_gcs(data, path, wrap=True, new_line=False,
+                       client=None, project_id=None,
+                       bucket=None, bucket_name=None):
+    uri = f'gs://{bucket_name}/{path}'
+    if wrap:
+        data = {'uri': uri, 'data': data}
+    data_string = ''
+    if new_line:
+        data_string = '\n'.join(json.dumps(r) for r in data)
+    else:
+        data_string = json.dumps(data)
+    
     blob = bucket.blob(path)
-    blob.upload_from_string(data, content_type)
-    uri = resolve_gcs_uri(path, bucket_name)
+    blob.upload_from_string(data_string, content_type='application/json')
+
+    logger.info(f'[GCS] Wrote file: {uri}')
+
     return uri
 
 # -------------------------------------------------
 # Reading
 # -------------------------------------------------
-
 @with_bucket
-@with_gcs_client
 def load_file_from_gcs(path, client=None, project_id=None, bucket=None, bucket_name=None):
-    logger.debug(f'load_file_from_gcs: path={path}')
     blob = bucket.blob(path)
     data = blob.download_as_text()
     return data
 
 @with_bucket
-@with_gcs_client
 def list_gcs_files(prefix, client=None, project_id=None, bucket=None, bucket_name=None):
     '''Lists all blobs under a GCS folder path'''
     logger.debug(f'list_gcs_files: prefix={prefix}, bucket_name={bucket_name}')
     blobs = bucket.list_blobs(prefix=prefix)
     files = [f'gs://{bucket_name}/{blob.name}' for blob in blobs]
-    logger.trace(f'files returned: {len(files)}, e.g. {files[:3]}')
     return files
 
 # -------------------------------------------------
 # Deleting
 # -------------------------------------------------
-
 @with_bucket
-@with_gcs_client
 def delete_files(paths, client=None, project_id=None, bucket=None, bucket_name=None):
-    logger.debug(f'delete_files: {len(paths)} paths provided, paths={paths}')
     for path in paths:
         blob = bucket.blob(path)
         blob.delete()
-    logger.info(f'Deleted {len(paths)} from bucket {bucket_name}')
     return
 
 @with_bucket
-@with_gcs_client
 def delete_gcs_prefix(prefix, client=None, project_id=None, bucket=None, bucket_name=None):
     '''Deletes all blobs under a GCS folder path'''
-    logger.debug(f'delete_gcs_prefix: prefix={prefix}')
     blobs = bucket.list_blobs(prefix=prefix)
     deleted = 0
     for blob in blobs:
@@ -159,3 +154,6 @@ def delete_gcs_prefix(prefix, client=None, project_id=None, bucket=None, bucket_
         deleted += 1
     logger.info(f'Deleted {deleted} blobs from gs://{bucket_name}/{prefix}')
     return
+
+
+

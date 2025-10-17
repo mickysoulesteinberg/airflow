@@ -41,7 +41,7 @@ def ssa_names():
         schema_config=bq_schema_config
     )
 
-    transformed_uris = transform_tasks.gcs_transform_for_bigquery(gcs_path, table_config, bucket_name=gcs_bucket, new_dir=gcs_tmp_dir)
+    transformed_uris = transform_tasks.gcs_transform_for_bigquery(gcs_path, table_config, source_bucket=gcs_bucket, new_dir=gcs_tmp_dir)
 
     loaded_staging_table = loader_tasks.gcs_to_bq_stg(transformed_uris, created_staging_table)
 
@@ -52,6 +52,5 @@ def ssa_names():
         merge_cols=merge_cols
     )
 
-    cleanup_tasks.delete_gcs_tmp_files(gcs_tmp_dir, bucket_name=gcs_bucket, wait_for=loaded_staging_table)
     
 ssa_names()
