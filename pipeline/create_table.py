@@ -1,5 +1,5 @@
 from core.bq import create_dataset, delete_table, table_exists, with_client, create_table
-from core.logger import get_logger
+from config.logger import get_logger
 
 logger = get_logger(__name__)
 

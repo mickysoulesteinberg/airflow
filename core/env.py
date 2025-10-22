@@ -1,5 +1,5 @@
 import os
-from core.logger import get_logger
+from config.logger import get_logger
 from utils.config import CONFIG
 
 logger = get_logger(__name__)

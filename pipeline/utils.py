@@ -1,6 +1,6 @@
 from core.gcs import list_gcs_files, with_gcs_client
 from core.utils import extract_gcs_prefix, resolve_gcs_file, resolve_gcs_path, looks_like_file
-from core.logger import get_logger
+from config.logger import get_logger
 import fnmatch
 
 logger = get_logger(__name__)

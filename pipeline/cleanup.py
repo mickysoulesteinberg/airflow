@@ -1,6 +1,6 @@
 from core.gcs import delete_files, with_gcs_client
 from pipeline.utils import parse_gcs_input
-from core.logger import get_logger
+from config.logger import get_logger
 
 logger = get_logger(__name__)
 

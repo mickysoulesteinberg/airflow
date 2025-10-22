@@ -6,7 +6,7 @@ from airflow.operators.python import get_current_context
 from core.utils import join_gcs_path
 
 from core.api import get_oauth2_token
-from core.logger import get_logger
+from config.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -34,7 +34,7 @@ def spotify_pipeline():
         gcs_file_name = make_file_name(f'artist{artist_id}')
         return join_gcs_path(gcs_prefix, gcs_file_name)
 
-    ingestion_tasks.api_fetch_and_load(
+    ingestion_tasks.api_fetch_and_load_og(
         api = API,
         api_path = api_path,
         api_args = {

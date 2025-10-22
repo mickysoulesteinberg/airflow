@@ -16,10 +16,3 @@ NAMES_SCHEMA = {
     'merge_cols': ['name', 'sex', 'gcs_uri']
 }
 
-# NAMES_BY_STATE_SCHEMA = {
-
-# }
-
-# NAMES_BY_TERRITORY_SCHEMA = {
-
-# }

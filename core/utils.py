@@ -1,6 +1,6 @@
 from core.env import resolve_default_bucket
 import textwrap
-from core.logger import get_logger
+from config.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -85,10 +85,12 @@ def resolve_gcs_uri(gcs_input, bucket_name=None):
 
 def resolve_gcs_path(gcs_input):
     if gcs_input.startswith('gs://'):
-        gcs_path, _, _ = resolve_gcs_file(gcs_input)
-        return gcs_path
+        resolved_path, _, _ = resolve_gcs_file(gcs_input)
     else:
-        return gcs_input
+        resolved_path = gcs_input
+    logger.trace(f'resolve_gcs_path: gcs_input=%s, resolved_path=%s',
+                 gcs_input, resolved_path)
+    return resolved_path
     
 def extract_gcs_prefix(input_str):
     '''
@@ -100,7 +102,6 @@ def extract_gcs_prefix(input_str):
         'folder/subfolder/string*.json' -> 'folder/subfolder'
     '''
     path_str = resolve_gcs_path(input_str)
-    logger.trace(f'path str resolved to {path_str}')
 
     if '*' in path_str:
         # Portion before first wildcard, trimmed to the last full directory
@@ -113,7 +114,8 @@ def extract_gcs_prefix(input_str):
         # Already a directory; just normalize
         prefix = path_str.rstrip('/')
 
-    logger.debug(f'input string: {input_str}, extracted prefix: {prefix}')
+    logger.debug(f'extract_gcs_prefix: input string=%s, extracted prefix=%s',
+                 input_str, prefix)
     return prefix
 
 
@@ -148,3 +150,36 @@ def format_stage_merge_query(staging_table, final_table, schema, merge_cols):
 
     return textwrap.dedent(query).strip()
     
+
+def resolve_bq_dataset_table(table=None, dataset=None, override_dataset=False):
+    logger.micro(f'resolve_bq_dataset_table: Inputs: table={table}, dataset={dataset}')
+
+    if '.' in table:
+        dataset_part, table_part = table.split('.', 1)
+        if override_dataset:
+            resolved_dataset = dataset or dataset_part
+        else:
+            resolved_dataset = dataset_part or dataset
+        resolved_table = table_part
+        logger.trace(f'resolve_bq_dataset_table: Parsed dataset.table as {resolved_dataset}.{resolved_table}')
+    else:
+        resolved_dataset = dataset
+        resolved_table = table
+
+    full_name = f'{resolved_dataset}.{resolved_table}' if resolved_dataset else resolved_table
+    logger.micro(f'resolve_bq_dataset_table result: {full_name}')
+
+    return full_name, resolved_table, resolved_dataset
+
+
+def collect_list(*args):
+    logger.micro(f'collect_list_of_strings: args={args}')
+    full_list = []
+    for arg in args:
+        if arg:
+            if isinstance(arg, list):
+                full_list += arg
+            else:
+                full_list.append(arg)
+    logger.trace(f'collect_list_of_strings: concated_list={full_list}')
+    return full_list

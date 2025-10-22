@@ -1,6 +1,6 @@
 import os, requests, time
 from utils.config import CONFIG
-from core.logger import get_logger
+from config.logger import get_logger
 
 # Get the configuration settings for APIs
 API_CONFIG = CONFIG['apis']

@@ -1,7 +1,7 @@
 from google.cloud import storage
 from contextlib import contextmanager
 from core.env import resolve_project
-from core.logger import get_logger
+from config.logger import get_logger
 from core.utils import resolve_gcs_uri
 
 logger = get_logger(__name__)
@@ -17,8 +17,12 @@ def get_gcs_client(project_id=None):
     If project_id is None, defaults from environment/credentials
     '''
     project_id = resolve_project(project_id)
-    logger.info(f'Creating new client (project_id: {project_id})')
+    logger.info(f'Creating Storage Client for project {project_id}')
     return storage.Client(project=project_id)
+
+def close_gcs_client(client):
+    logger.info(f'Closing Client for project {client.project}')
+    client.close()
 
 # Explicitly manage client lifecycle
 @contextmanager
@@ -29,13 +33,12 @@ def gcs_client_context(project_id=None):
         with gcs_client_context('my-project') as client:
             ...
     '''
-    logger.trace(f'Initializing Client for Project {project_id}.')
+    logger.debug(f'gcs_client_context: Initializing client, project_id={project_id}')
     client = get_gcs_client(project_id=project_id)
     try:
         yield client
     finally:
-        logger.trace(f'Closing Client for Project {project_id}.')
-        client.close()
+        close_gcs_client(client)
 
 # Decorator wraps functions for Airflow
 def with_gcs_client(func):
@@ -47,7 +50,7 @@ def with_gcs_client(func):
       - Neither is passed (falls back to env vars)
     '''
     def wrapper(*args, client=None, project_id=None, **kwargs):
-        logger.debug(f'with_client: client=%s, project_id=%s',
+        logger.debug(f'with_gcs_client: client=%s, project_id=%s',
                      'yes' if client else 'no',
                      project_id or 'none')
 
@@ -81,14 +84,14 @@ def with_bucket(func):
             if bucket_name and bucket_name != bucket.name:
                 logger.warning(f'with_bucket: bucket_name argument ({bucket_name}) does not match bucket.name ({bucket.name}). Using bucket.name.')
             bucket_name = bucket.name
-            logger.trace(f'bucket_name generated: {bucket_name}')
+            logger.micro(f'bucket_name generated: {bucket_name}')
 
         # Otherwise use client and bucket_name to generate bucket
         elif bucket_name:
             if not client:
                 raise ValueError('with_bucket requires a valid GCS client')
             bucket = client.bucket(bucket_name)
-            logger.trace(f'bucket {bucket_name} initialized.')
+            logger.micro(f'bucket {bucket_name} initialized.')
         
         else:
             raise ValueError('with_bucket requires either `bucket` or `bucket_name` argument')
@@ -104,8 +107,8 @@ def with_bucket(func):
 @with_gcs_client
 def upload_from_string(data, path, content_type='application/json',
                        client=None, project_id=None, bucket=None, bucket_name=None):
-    logger.debug(f'Uploading data to {path}')
-    logger.trace(f'data = {data}')
+    logger.debug(f'upload_from_string: Uploading data to %s, data=%s',
+                 path, data[:100])
     blob = bucket.blob(path)
     blob.upload_from_string(data, content_type)
     uri = resolve_gcs_uri(path, bucket_name)
@@ -121,6 +124,7 @@ def load_file_from_gcs(path, client=None, project_id=None, bucket=None, bucket_n
     logger.debug(f'load_file_from_gcs: path={path}')
     blob = bucket.blob(path)
     data = blob.download_as_text()
+    logger.trace(f'load_file_from_gcs: loaded_content={data[:100]}')
     return data
 
 @with_bucket

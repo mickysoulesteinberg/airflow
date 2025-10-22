@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from core.env import resolve_project
 from core.utils import format_stage_merge_query
 from google.api_core.exceptions import NotFound
-from core.logger import get_logger
+from config.logger import get_logger
 logger = get_logger(__name__)
 
 # -------------------------------------------------

@@ -1,20 +1,20 @@
 from airflow.decorators import dag, task_group, task
 from airflow.utils.dates import days_ago
 from airflow.operators.python import get_current_context
+from pipeline.dag_helpers import make_gcs_path_factory
 import tasks.ingest as ingestion_tasks
 import tasks.load as loader_tasks
 import tasks.utils as helper_tasks
 import tasks.transform as transform_tasks
 import tasks.cleanup as cleanup_tasks
-from core.logger import get_logger
+from config.logger import get_logger
 from schemas.tmdb import MOVIES_SCHEMA, CREDITS_SCHEMA
-from pipeline.dag_helpers import make_gcs_path_factory
 
 logger = get_logger(__name__)
 
 # ----- DAG PARAMS
 # -----
-YEARS = [2003, 2004]
+YEARS = [2003]
 
 # ----- Dag-level constants (static)
 # -----
@@ -75,6 +75,7 @@ def tmdb_pipeline():
         return_data = api_call_dict.get('return_data')
         return {'gcs_file_name': gcs_file_name, 'api_args': api_args, 'return_data': return_data}
 
+
     @task_group
     def api_ingestion_iterate(api, api_path, table_config, json_root, gcs_folders,
                               api_arg_builder=None, return_keys=None, **api_kwargs):
@@ -86,12 +87,14 @@ def tmdb_pipeline():
         gcs_file_name = task_builder['gcs_file_name']
         return_data = task_builder['return_data']
 
-        fetched = ingestion_tasks.api_fetch_and_load(api=api, api_path=api_path, api_args=api_args, 
+        fetched = ingestion_tasks.api_fetch_and_load_og(api=api, api_path=api_path, api_args=api_args, 
                                                      gcs_prefix=gcs_prefix, gcs_file_name=gcs_file_name,
                                                      return_data=return_data)
         loaded_gcs_path = fetched['gcs_path']
 
-        transformed_uris = transform_tasks.gcs_transform_for_bigquery(loaded_gcs_path, table_config, json_root=json_root)
+        transformed_uris = transform_tasks.gcs_transform_for_bigquery_og(loaded_gcs_path,
+                                                                      table_config,
+                                                                      json_root=json_root)
 
         fetched >> transformed_uris
 
@@ -126,7 +129,7 @@ def tmdb_pipeline():
         bq_schema_config = table_config['schema']
 
         # Task: Create empty staging table in BigQuery
-        created_staging_table = loader_tasks.create_staging_table(
+        created_staging_table = loader_tasks.create_staging_table_og(
             dataset_table=staging_table,
             schema_config=bq_schema_config
         )
@@ -151,7 +154,7 @@ def tmdb_pipeline():
 
         loaded_staging_table = loader_tasks.gcs_to_bq_stg(transformed_uris, created_staging_table)
 
-        merged_final_table = loader_tasks.bq_stg_to_final_merge(
+        merged_final_table = loader_tasks.bq_stg_to_final_merge_og(
             staging_table=loaded_staging_table,
             final_table=final_table,
             schema=bq_schema_config,
@@ -176,7 +179,7 @@ def tmdb_pipeline():
         year=YEARS
     )['movie_ids']
     
-    api_ingestion.override(group_id='credits')('credits', movie_id=movie_ids)
+    # api_ingestion.override(group_id='credits')('credits', movie_id=movie_ids)
 
 
 

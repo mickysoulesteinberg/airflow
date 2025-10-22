@@ -1,7 +1,7 @@
 from airflow.decorators import task
 from core.gcs import delete_gcs_prefix
 from pipeline.cleanup import delete_gcs_files
-from core.logger import get_logger
+from config.logger import get_logger
 logger = get_logger(__name__)
 
 
