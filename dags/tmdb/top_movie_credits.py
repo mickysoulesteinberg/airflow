@@ -4,6 +4,7 @@ import tasks.ingest as ingestion_tasks
 import tasks.transform as transform_tasks
 import tasks.load as loader_tasks
 import tasks.cleanup as cleanup_tasks
+import tasks.utils as helper_tasks
 from config.datasources import TMDB_DISCOVER_MOVIES, TMDB_CREDITS
 
 from config.logger import get_logger
@@ -33,8 +34,16 @@ def top_movie_credits():
     
     
     @task_group
-    def api_call_iterate(config, api, api_path, gcs_prefix, table_config, api_root, **kwargs):
-        call_builder = ingestion_tasks.setup_api_call(config=config, **kwargs)
+    def api_call_iterate(api, api_path, 
+                         api_arg_builder, arg_fields,
+                         gcs_prefix, table_config, api_root,
+                         return_data=None,
+                         **kwargs):
+        call_builder = ingestion_tasks.setup_api_call(
+            api_arg_builder=api_arg_builder,
+            arg_fields=arg_fields,
+            **kwargs
+        )
 
         api_args = call_builder['api_args']
         gcs_file_name = call_builder['gcs_file_name']
@@ -44,7 +53,7 @@ def top_movie_credits():
                                                      api_args=api_args,
                                                      gcs_prefix=gcs_prefix,
                                                      gcs_file_name=gcs_file_name,
-                                                    #  return_data=return_data,
+                                                     return_data=return_data,
                                                      metadata=call_metadata)
 
         loaded_gcs_path = fetched['gcs_path']
@@ -59,7 +68,7 @@ def top_movie_credits():
 
 
     @task_group
-    def etl_workflow(config, bigquery_table_name, **kwargs):
+    def etl_workflow(config, bigquery_table_name, return_data=None, **kwargs):
         initial_setup = setup(config)
 
         table_config = initial_setup['table_config']
@@ -69,13 +78,22 @@ def top_movie_credits():
         api = initial_setup['api']
         api_path = initial_setup['api_path']
         gcs_prefix = initial_setup['gcs_prefix']
+        api_arg_builder = config.get('api_arg_builder')
+        arg_fields = config.get('arg_fields')
 
-        iterate_calls = api_call_iterate(config, api=api, api_path=api_path,
-                                         gcs_prefix=gcs_prefix,
-                                         table_config=table_config, api_root=api_root,
-                                         **kwargs)
+        iterate_calls = api_call_iterate.partial(
+            api=api, api_path=api_path,
+            api_arg_builder=api_arg_builder,
+            arg_fields=arg_fields,
+            gcs_prefix=gcs_prefix,
+            table_config=table_config,
+            api_root=api_root,
+            return_data=return_data
+        ).expand(**kwargs)
         
-        transformed_uris = iterate_calls
+        transformed_uris = helper_tasks.reduce_xcoms.override(
+            task_id='collect_tmp_uris'
+        )(iterate_calls)
         
         created_staging_table = loader_tasks.create_staging_table(
             schema_config=bq_schema_config,
@@ -99,7 +117,12 @@ def top_movie_credits():
         )
 
 
-    movies = etl_workflow(TMDB_DISCOVER_MOVIES, 'top_grossing_movies', year=2020)
+    movies = etl_workflow(
+        config=TMDB_DISCOVER_MOVIES,
+        bigquery_table_name='top_grossing_movies',
+        return_data={'movie_id': 'id'},
+        year=[2020]
+    )
     
 
 top_movie_credits()
