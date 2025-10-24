@@ -1,6 +1,5 @@
 from core.gcs import load_file_from_gcs, with_gcs_client, upload_from_string
 from core.utils import resolve_gcs_uri, extract_gcs_prefix, join_gcs_path, collect_list
-from pipeline.ingest import upload_json_to_gcs_og
 from pipeline.utils import parse_gcs_input
 import os, json, csv
 from io import StringIO
@@ -127,63 +126,6 @@ def gcs_transform_and_store_file(path, schema_config,
     store_uri = resolve_gcs_uri(new_blob_path, bucket_name=store_bucket)
     return store_uri
 
-@with_gcs_client
-def gcs_transform_and_store_file_og(path, schema_config, source_type=None, new_dir=None, new_file_name=None,
-                                 json_root=None, delimiter=None, fieldnames=None, 
-                                 context_values=None, metadata=None,
-                                 client=None, project_id=None,
-                                 source_bucket_override=None, store_bucket_override=None):
-    # Resolve Buckets
-    source_bucket = resolve_bucket(override=source_bucket_override)
-    store_bucket = resolve_bucket(purpose='tmp', override=store_bucket_override)
-    
-    # Get raw data
-    content = load_file_from_gcs(path, client=client, project_id=project_id, bucket_name=source_bucket)
-
-    # Update metadat
-    metadata = metadata or {}
-    metadata['gcs_path'] = path
-    logger.micro(f'gcs_transform_and_store_file: Updating metadata with gcs_path: {path}')
-
-    # Transform data depending on source type
-    if source_type is None:
-        # Use the file extension to determine source type
-        logger.warning('source_type not provided, inferring from file extension')
-        source_type = os.path.splitext(path)[-1].lower().lstrip('.')
-    if source_type == 'json':
-        transformed_records = transform_json_records(content, schema_config,
-                                                     context_values=context_values,
-                                                     metadata=metadata,
-                                                     json_root=json_root)
-    elif source_type in ['csv', 'txt']:
-        if not fieldnames:
-            logger.warning('fieldnames not provided, inferring from CSV header')
-
-        transformed_records = transform_csv_records(content, schema_config,
-                                                    context_values=context_values,
-                                                    metadata=metadata,
-                                                    delimiter=delimiter, fieldnames=fieldnames)
-    else:
-        raise ValueError(f'Unsupported file extension: {source_type}')
-    
-    # Prep data for BigQuery
-    data_to_load = '\n'.join(json.dumps(r) for r in transformed_records)
-    
-    # If save directory not set, get it from the input path
-    if new_dir:
-        save_dir = new_dir
-    else:
-        save_dir = join_gcs_path(extract_gcs_prefix(path))
-    # If new file name not set, generate from input file name
-    save_file_name = new_file_name or os.path.basename(path)
-    new_blob_path = join_gcs_path(save_dir, save_file_name)
-
-    # Write to new GCS location
-    upload_from_string(data_to_load, new_blob_path, client=client, project_id=project_id,
-                       bucket_name=store_bucket)
-    store_uri = resolve_gcs_uri(new_blob_path, bucket_name=store_bucket)
-    return store_uri
-
 
 @with_gcs_client
 def gcs_transform_and_store(gcs_input, schema_config, source_type=None,
@@ -265,52 +207,4 @@ def transform_json_records(content, schema_config, context_values=None,
     logger.trace(f'transform_json_records: transformed rows sample = {rows[:2]}')
     return rows
 
-
-@with_gcs_client
-def gcs_transform_and_store_og(gcs_input, schema_config=None, table_config=None, source_type=None,
-                            new_dir=None, new_file_name=None, 
-                            json_root=None, delimiter=None, fieldnames=None,
-                            client=None, project_id=None,
-                            source_bucket_override=None, store_bucket_override=None):
-
-    '''
-    Reads data from GCS (JSON or CSV/TXT), applies transform, 
-    then writes transformed JSON back to GCS.
-    Returns new GCS URI for downstream bulk load
-    '''
-    # Resolve Buckets
-    source_bucket = resolve_bucket(override=source_bucket_override)
-    store_bucket = resolve_bucket(purpose='tmp', override=store_bucket_override)
-    
-    if table_config:
-        schema_config = schema_config or table_config.get('schema')
-        source_type = source_type or table_config.get('source_type')
-        delimiter = delimiter or table_config.get('delimiter')
-        fieldnames = fieldnames or table_config.get('fieldnames')
-
-    if not schema_config:
-        raise ValueError('Schema must be provided via schema_config or table_config')
-    
-    # Parse GCS input to get the bucket and the list of paths
-    uris, paths, bckt_name = parse_gcs_input(gcs_input, client=client, project_id=project_id, bucket_name=source_bucket)
-
-    new_uris = []
-    # Transform and store for each path
-    for path in paths:
-
-        # Define context values to use for static/generated columns
-        context_values = {
-            # TODO change this to gcs_path or file name
-            'gcs_uri': path
-        }
-
-        new_uri = gcs_transform_and_store_file_og(path, schema_config, source_type=source_type, new_dir=new_dir, new_file_name=new_file_name,
-                                           json_root=json_root, delimiter=delimiter, fieldnames=fieldnames, context_values=context_values,
-                                           client=client, project_id=project_id,
-                                           source_bucket_override=source_bucket,
-                                           store_bucket_override=store_bucket)
-        
-        new_uris.append(new_uri)
-
-    return new_uris
 

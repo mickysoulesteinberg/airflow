@@ -3,7 +3,6 @@ from airflow.utils.dates import days_ago
 import tasks.load as loader_tasks
 import tasks.transform as transform_tasks
 import tasks.cleanup as cleanup_tasks
-from schemas.ssa import NAMES_SCHEMA
 from config.datasources import SSA_NAMES
 
 from config.logger import get_logger
