@@ -13,28 +13,9 @@ logger = get_logger(__name__)
 
 @dag()
 def top_movie_credits():
-    api_config = TMDB_DISCOVER_MOVIES
 
     @task_group
-    def setup(config):
-        path_setup = ingestion_tasks.setup_api_path(config=config)
-        bq_setup = transform_tasks.setup_for_bq(config)
-
-        return {
-            'api': path_setup['api'],
-            'api_path': path_setup['api_path'],
-            'gcs_prefix': path_setup['gcs_prefix'],
-            'table_config': bq_setup['table_config'],
-            'schema_config': bq_setup['schema_config'],
-            'bigquery_dataset': bq_setup['dataset'],
-            'api_root': bq_setup['api_root'],
-            # 'source_type': bq_setup['source_type'],
-            # 'merge_cols': bq_setup['merge_cols']
-        }
-    
-    
-    @task_group
-    def api_call_iterate(api, api_path, 
+    def fetch_and_prep(api, api_path, 
                          api_arg_builder, arg_fields,
                          gcs_prefix, table_config, api_root,
                          return_data=None,
@@ -56,32 +37,36 @@ def top_movie_credits():
                                                      return_data=return_data,
                                                      metadata=call_metadata)
 
+        result = {key: fetched[key] for key in return_data or {}}
+
         loaded_gcs_path = fetched['gcs_path']
 
         transformed_uri = transform_tasks.gcs_transform_for_bq(loaded_gcs_path,
                                                                 table_config=table_config,
                                                                 api_root=api_root)
-
+        result['transformed_uri'] = transformed_uri
         fetched >> transformed_uri
 
-        return transformed_uri
+        return result
 
 
     @task_group
     def etl_workflow(config, bigquery_table_name, return_data=None, **kwargs):
-        initial_setup = setup(config)
+        
 
-        table_config = initial_setup['table_config']
-        bq_schema_config = initial_setup['schema_config']
-        bigquery_dataset = initial_setup['bigquery_dataset']
-        api_root = initial_setup['api_root']
-        api = initial_setup['api']
-        api_path = initial_setup['api_path']
+        initial_setup = ingestion_tasks.setup_etl(**config)
+        
+        table_config = config['table_config']
+        bq_schema_config = table_config['schema']
+        bigquery_dataset = config['bigquery_dataset']
+        api_root = config.get('api_root')
+        api = config['api']
+        api_path = config['api_path']
         gcs_prefix = initial_setup['gcs_prefix']
         api_arg_builder = config.get('api_arg_builder')
         arg_fields = config.get('arg_fields')
 
-        iterate_calls = api_call_iterate.partial(
+        iterate_calls = fetch_and_prep.partial(
             api=api, api_path=api_path,
             api_arg_builder=api_arg_builder,
             arg_fields=arg_fields,
@@ -93,7 +78,13 @@ def top_movie_credits():
         
         transformed_uris = helper_tasks.reduce_xcoms.override(
             task_id='collect_tmp_uris'
-        )(iterate_calls)
+        )(iterate_calls['transformed_uri'])
+
+        returned_data = {}
+        for key in return_data or {}:
+            returned_data[key] = helper_tasks.reduce_xcoms.override(
+                task_id=f'collect_{key}'
+            )(iterate_calls[key])
         
         created_staging_table = loader_tasks.create_staging_table(
             schema_config=bq_schema_config,
@@ -116,13 +107,23 @@ def top_movie_credits():
             wait_for=merged_final_table
         )
 
+        return returned_data
+
+
 
     movies = etl_workflow(
         config=TMDB_DISCOVER_MOVIES,
-        bigquery_table_name='top_grossing_movies',
-        return_data={'movie_id': 'id'},
-        year=[2020]
+        bigquery_table_name='top_movies',
+        return_data={'movie_id': 'results[].id'},
+        year=list(range(2000,2001))
+    )['movie_id']
+
+    etl_workflow(
+        config=TMDB_CREDITS,
+        bigquery_table_name='top_movies_credits',
+        movie=movies
     )
-    
+
+
 
 top_movie_credits()

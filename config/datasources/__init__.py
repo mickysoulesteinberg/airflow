@@ -1,4 +1,4 @@
-from config.api_factory import create_config, BQ_METADATA_COL
+from config.api_factory import create_config, BQ_METADATA_COL, BQ_TIMESTAMP_COL
 
 
 # Parameters

@@ -2,13 +2,14 @@ from config.logger import get_logger
 logger = get_logger(__name__)
 
 BQ_METADATA_COL = 'airflow_metadata'
+BQ_TIMESTAMP_COL = 'last_updated'
 
 def create_arg_builder(arg_fields, api=None, api_path=None):
     """Returns a function that builds API request args dynamically."""
     logger.trace(f'Creating arg builder for {api}.{api_path}')
 
     def arg_builder(**kwargs):
-        logger.debug(f'Building args for {api}.{api_path} with kwargs={kwargs}')
+        logger.debug(f'arg_builder: Building args for {api}.{api_path} with kwargs={kwargs}')
         params, path_vars, call_id = {}, {}, ''
 
         for field, data in arg_fields.items():
@@ -37,7 +38,7 @@ def create_arg_builder(arg_fields, api=None, api_path=None):
         if call_id:
             built_args['call_id'] = call_id
 
-        logger.trace(f'Built args for {api_path}: {built_args}')
+        logger.trace(f'arg_builder: Built args for {api_path}: {built_args}')
         return built_args
 
     return arg_builder
@@ -60,8 +61,9 @@ def create_table_config(raw_schema, row_id=None, arg_fields=None, source_type=No
             col['mode'] = 'REQUIRED'
         schema.append(col)
 
-    # Metadata col
+    # Cols for all workflows
     schema.append({'name': BQ_METADATA_COL, 'type': 'JSON'})
+    schema.append({'name': BQ_TIMESTAMP_COL, 'type': 'TIMESTAMP'})
     # for name, data in arg_fields.items():
     #     if data.get('data_type'):
     #         schema.append({'name': name, 'type': data['data_type']})

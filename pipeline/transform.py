@@ -28,53 +28,13 @@ def transform_record(record, schema_config, context_values=None,  metadata=None)
             logger.trace(f'Setting value for {name} from context: {value}')
         else:
             value = record.get(source)
-        
-        if col_type == 'JSON' and value is not None:
-            value = json.dumps(value)
 
         row[name] = value
     logger.trace(f'transform_record: transformed = {row}')
     return row
 
 
-def transform_csv_records(content, schema_config, context_values=None, 
-                          metadata=None, delimiter=None, fieldnames=None):
-    metadata = metadata or {}
-    logger.debug(f'transform_csv_records: Beginning transform of data={content[:100]}')
-    delimiter = delimiter or ','
-    reader = csv.DictReader(StringIO(content), fieldnames=fieldnames, delimiter=delimiter)
-    csv_data = list(reader)
-    logger.trace(f'transform_csv_records: csv_data sample={csv_data[:2]}')
 
-    rows = [transform_record(record, schema_config, 
-                             context_values=context_values, 
-                             metadata=metadata) for record in csv_data]
-    logger.trace(f'transform_csv_records: transformed rows sample={rows[:2]}')
-    return rows
-
-def transform_json_records(content, schema_config, context_values=None,
-                           metadata=None, json_root=None):
-    metadata = metadata or {}
-    logger.debug(f'transform_json_records: Beginning transform of data={content[:100]}')
-    logger.trace(f'transform_json_records: json_root={json_root}')
-    json_data = json.loads(content)
-    logger.trace(f'transform_json_records: json_data={json_data}')
-    # Drill down if json_root is provided
-    if json_root:
-        for key in json_root:
-            if isinstance(json_data, dict) and key in json_data:
-                json_data = json_data[key]
-            else:
-                raise KeyError(f'Key {key} not found in JSON data')
-    logger.trace(f'transform_json_records: Drilled down json_data={json_data}')
-    # At this point, json_data could be a dict (single record) or list (multiple records)
-    if not isinstance(json_data, list):
-        json_data = [json_data]
-    rows = [transform_record(record, schema_config, 
-                             context_values=context_values,
-                             metadata=metadata) for record in json_data]
-    logger.trace(f'transform_json_records: transformed rows sample = {rows[:2]}')
-    return rows
 
 def json_drill_down(data, root):
     for key in root:
@@ -263,6 +223,44 @@ def gcs_transform_and_store(gcs_input, schema_config, source_type=None,
     return new_uris
 
 
+def transform_csv_records(content, schema_config, context_values=None, 
+                          metadata=None, delimiter=None, fieldnames=None):
+    metadata = metadata or {}
+    logger.debug(f'transform_csv_records: Beginning transform of data={content[:100]}')
+    delimiter = delimiter or ','
+    reader = csv.DictReader(StringIO(content), fieldnames=fieldnames, delimiter=delimiter)
+    csv_data = list(reader)
+    logger.trace(f'transform_csv_records: csv_data sample={csv_data[:2]}')
+
+    rows = [transform_record(record, schema_config, 
+                             context_values=context_values, 
+                             metadata=metadata) for record in csv_data]
+    logger.trace(f'transform_csv_records: transformed rows sample={rows[:2]}')
+    return rows
+
+def transform_json_records(content, schema_config, context_values=None,
+                           metadata=None, json_root=None):
+    metadata = metadata or {}
+    logger.debug(f'transform_json_records: Beginning transform of data={content[:100]}')
+    logger.trace(f'transform_json_records: json_root={json_root}')
+    json_data = json.loads(content)
+    logger.trace(f'transform_json_records: json_data={json_data}')
+    # Drill down if json_root is provided
+    if json_root:
+        for key in json_root:
+            if isinstance(json_data, dict) and key in json_data:
+                json_data = json_data[key]
+            else:
+                raise KeyError(f'Key {key} not found in JSON data')
+    logger.trace(f'transform_json_records: Drilled down json_data={json_data}')
+    # At this point, json_data could be a dict (single record) or list (multiple records)
+    if not isinstance(json_data, list):
+        json_data = [json_data]
+    rows = [transform_record(record, schema_config, 
+                             context_values=context_values,
+                             metadata=metadata) for record in json_data]
+    logger.trace(f'transform_json_records: transformed rows sample = {rows[:2]}')
+    return rows
 
 
 @with_gcs_client

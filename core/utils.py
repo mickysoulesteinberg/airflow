@@ -1,6 +1,7 @@
 from core.env import resolve_default_bucket
 import textwrap
 from config.logger import get_logger
+from config.datasources import BQ_TIMESTAMP_COL
 
 logger = get_logger(__name__)
 
@@ -125,14 +126,14 @@ def format_stage_merge_query(staging_table, final_table, schema, merge_cols):
     # Define clauses
     on_clause = ' AND '.join([f'F.`{col}` = S.`{col}`' for col in merge_cols])
     update_clause = ',\n    '.join([
-        'F.`last_updated` = CURRENT_TIMESTAMP()' if col == 'last_updated'
+        f'F.`{BQ_TIMESTAMP_COL}` = CURRENT_TIMESTAMP()' if col == BQ_TIMESTAMP_COL
         else f'F.`{col}` = S.`{col}`'
         for col in schema_cols
         if col not in merge_cols
     ])
     insert_cols = ', '.join([f'`{col}`' for col in schema_cols])
     values_clause = ', '.join([
-        'CURRENT_TIMESTAMP()' if col == 'last_updated'
+        'CURRENT_TIMESTAMP()' if col == BQ_TIMESTAMP_COL
         else f'S.`{col}`'
         for col in schema_cols
     ])

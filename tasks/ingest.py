@@ -10,29 +10,18 @@ from utils.helpers import get_valid_kwargs
 from config.logger import get_logger
 logger = get_logger(__name__)
 
-@task(multiple_outputs = True)
-def setup_api_path(api=None, api_path=None, config=None):
-    logger.trace(f'setup_api_path: api={api}, api_path={api_path}, config={config}')
+@task(multiple_outputs=True)
+def setup_etl(**kwargs):
+    return_dict = {}
 
-    config = config or {}
-    logger.verbose(f'config={config}')
-    api = api or config.get('api')
-    if not api:
-        raise ValueError(f'Must specify value for `api` directly or through `config`')
-    api_path = api_path or config.get('api_path')
-    if not api_path:
-        raise ValueError(f'Must specify value for `api_path` either directly or through `config`')
-    
-    context = get_current_context()
-    dag_id = context['dag'].dag_id
+    api = kwargs.get('api')
+    api_path = kwargs.get('api_path')
+    if api and api_path:
+        context = get_current_context()
+        dag_id = context['dag'].dag_id
+        return_dict['gcs_prefix'] = create_gcs_prefix(dag_id, api, api_path)
 
-    logger.verbose(f'Setting up API Path: api={api}, api_path={api_path}, dag_id={dag_id}')
-
-    return {
-        'api': api,
-        'api_path': api_path,
-        'gcs_prefix': create_gcs_prefix(dag_id, api, api_path)
-    }
+    return return_dict
 
 
 @task(multiple_outputs=True)
@@ -58,8 +47,6 @@ def setup_api_call(config=None, **kwargs):
 
     return {'gcs_file_name': gcs_file_name, 'api_args': api_args, 'metadata': api_call_kwargs}
 
-
-
 @task(multiple_outputs=True)
 def api_fetch_and_load(api, api_path, api_args, 
                        gcs_path=None, gcs_prefix=None, gcs_file_name=None,
@@ -78,6 +65,7 @@ def api_fetch_and_load(api, api_path, api_args,
     return_dict = {}
 
     # Build GCS path if necessary
+    logger.debug(f'gcs_path={gcs_path}, gcs_prefix={gcs_prefix}, gcs_file_name={gcs_file_name}')
     if gcs_path is None and gcs_prefix and gcs_file_name:
         gcs_path = join_gcs_path(gcs_prefix, gcs_file_name)
 

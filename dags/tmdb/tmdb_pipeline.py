@@ -179,7 +179,9 @@ def tmdb_pipeline():
         year=YEARS
     )['movie_ids']
     
-    # api_ingestion.override(group_id='credits')('credits', movie_id=movie_ids)
+    api_ingestion.override(
+        group_id='credits'
+    )('credits', movie_id=movie_ids)
 
 
 
