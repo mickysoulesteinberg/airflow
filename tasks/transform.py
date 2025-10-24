@@ -7,42 +7,13 @@ from core.utils import collect_list
 logger = get_logger(__name__)
 
 
-@task(multiple_outputs=True)
-def setup_for_bq(config=None, **kwargs):
-    
-    config = config or {}
-    table_config=kwargs.get('table_config') or config.get('table_config')
-    logger.debug(f'setup_for_transform: table_config={table_config}')
-
-    for key, value in config.items():
-        logger.trace(f'value for {key}={value}')
-
-    schema_config = kwargs.get('schema_config') or table_config['schema']
-    dataset = kwargs.get('bigquery_dataset') or config.get('bigquery_dataset')
-
-    return_data = {
-        'table_config': table_config,
-        'schema_config': schema_config,
-        'dataset': dataset
-    }
-
-    api_root = kwargs.get('api_root') or config.get('api_root')
-    if api_root:
-        return_data['api_root'] = api_root
-    source_type = kwargs.get('source_type') or config.get('source_type')
-    if source_type:
-        return_data['source_type'] = source_type
-
-    return return_data
-
-
 
 @task
-def gcs_transform_for_bq(gcs_input, table_config=None,
-                         schema_config=None, source_type=None,
-                         data_root=RAW_DATA_KEY, metadata_root=BQ_METADATA_COL,
-                         api_root=None, delimiter=None, fieldnames=None,
-                         source_bucket=None, new_dir=None):
+def gcs_transform_for_bq(storage_config=None, gcs_path=None, gcs_bucket=None,
+                         table_config=None, schema_config=None,
+                         data_config=None, source_type=None, data_root=None, delimiter=None, fieldnames=None,
+                         raw_data_root=RAW_DATA_KEY, metadata_root=BQ_METADATA_COL,
+                         new_dir=None):
     '''
     Transforms raw data in GCS to a format suitable for loading
     into BigQuery, and writes the transformed data back to a temporary
@@ -54,26 +25,37 @@ def gcs_transform_for_bq(gcs_input, table_config=None,
     - a prefix ending with '/' (to indicate all files in a folder)
     - a wildcard path, e.g. 'path/*.json'
     '''
-    logger.debug(f'gcs_transform_for_bigquery: gcs_input={gcs_input}')
-    logger.debug(table_config)
+    logger.debug(f'storage_config={storage_config}')
+    logger.debug(f'data_config={data_config}')
 
+    # Storage Config Args
+    storage_config = storage_config or {}
+    gcs_path = gcs_path or storage_config.get('gcs_path')
+    gcs_bucket = gcs_bucket or storage_config.get('gcs_bucket')
+
+    # Table Config Args
+    table_config = table_config or {}
     schema_config = schema_config or table_config.get('schema')
     if not schema_config:
         raise ValueError('Schema must be provided via schema_config or table_config')
     
-    source_type = source_type or table_config.get('source_type')
-    delimiter = delimiter or table_config.get('delimiter')
-    fieldnames = fieldnames or table_config.get('fieldnames')
+    # Data Config Args
+    data_config = data_config or {}
+    source_type = source_type or data_config.get('source_type')
+    delimiter = delimiter or data_config.get('delimiter')
+    fieldnames = fieldnames or data_config.get('fieldnames')
+    logger.micro(f'fieldnames={fieldnames}')
+    data_root = data_root or data_config.get('data_root')
 
     # Get the root for the raw data in the GCS file
-    full_data_root = collect_list(data_root, api_root)
+    full_data_root = collect_list(raw_data_root, data_root)
 
     # Perform transformation and write to the new GCS location
-    transformed_uris = gcs_transform_and_store(gcs_input, schema_config,
+    transformed_uris = gcs_transform_and_store(gcs_path, schema_config,
+                                               source_type=source_type, delimiter=delimiter, fieldnames=fieldnames,
                                                data_root=full_data_root,
                                                metadata_root=metadata_root,
-                                               delimiter=delimiter,
-                                               new_dir=new_dir, source_bucket_override=source_bucket)
+                                               new_dir=new_dir, source_bucket_override=gcs_bucket)
 
 
     return transformed_uris

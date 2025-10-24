@@ -11,14 +11,13 @@ from config.datasources import BQ_METADATA_COL
 logger = get_logger(__name__)
 
 def transform_record(record, schema_config, context_values=None,  metadata=None):
-    logger.debug(f'transform_record: record={record}')
+    logger.micro(f'transform_record: record={record}')
     context_values = context_values or {}
     metadata =  metadata or {}
     row = {}
     for col in schema_config:
         name = col['name']
         source = col.get('source', name)
-        col_type = col.get('type')
 
         # Set default value from context if set
         if name == BQ_METADATA_COL:
@@ -30,7 +29,7 @@ def transform_record(record, schema_config, context_values=None,  metadata=None)
             value = record.get(source)
 
         row[name] = value
-    logger.trace(f'transform_record: transformed = {row}')
+    logger.micro(f'transform_record: transformed = {row}')
     return row
 
 
@@ -46,7 +45,8 @@ def json_drill_down(data, root):
 
 
 @with_gcs_client
-def gcs_transform_and_store_file(path, schema_config, source_type=None,
+def gcs_transform_and_store_file(path, schema_config,
+                                 source_type=None,
                                  new_dir=None, new_file_name=None,
                                  data_root=None, metadata_root=None,
                                  delimiter=None, fieldnames=None, 
@@ -73,7 +73,7 @@ def gcs_transform_and_store_file(path, schema_config, source_type=None,
     # Transform data depending on source type
     if source_type is None:
         # Use the file extension to determine source type
-        logger.warning('source_type not provided, inferring from file extension')
+        logger.warning('gcs_transform_and_store_file: source_type not provided, inferring from file extension')
         source_type = os.path.splitext(path)[-1].lower().lstrip('.')
     if source_type == 'json':
 
@@ -98,6 +98,7 @@ def gcs_transform_and_store_file(path, schema_config, source_type=None,
             logger.warning('gcs_transform_and_store_file: metadata_root provided, but not used for csv files')
 
         logger.debug(f'gcs_transform_and_store_file: Beginning transform of data={content[:100]}')
+        delimiter = delimiter or ','
         reader = csv.DictReader(StringIO(content), fieldnames=fieldnames, delimiter=delimiter)
         csv_data = list(reader)
         logger.trace(f'gcs_transform_and_store_file: csv_data sample = {csv_data[:2]}')
@@ -201,6 +202,8 @@ def gcs_transform_and_store(gcs_input, schema_config, source_type=None,
     source_bucket = resolve_bucket(override=source_bucket_override)
     store_bucket = resolve_bucket(purpose='tmp', override=store_bucket_override)
 
+    logger.debug(f'gcs_transform_and_store: source_type={source_type}')
+
     if not schema_config:
         raise ValueError('Schema must be provided via schema_config or table_config')
     
@@ -210,7 +213,7 @@ def gcs_transform_and_store(gcs_input, schema_config, source_type=None,
     new_uris = []
     # Transform and store for each path
     for path in paths:
-
+        logger.debug(f'source_type={source_type}')
         new_uri = gcs_transform_and_store_file(path, schema_config, source_type=source_type, new_dir=new_dir, new_file_name=new_file_name,
                                            data_root=data_root, metadata_root=metadata_root,
                                            delimiter=delimiter, fieldnames=fieldnames,

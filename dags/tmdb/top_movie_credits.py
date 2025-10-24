@@ -1,5 +1,4 @@
-from airflow.decorators import dag, task_group, task
-from airflow.operators.python import get_current_context
+from airflow.decorators import dag, task_group
 import tasks.ingest as ingestion_tasks
 import tasks.transform as transform_tasks
 import tasks.load as loader_tasks
@@ -17,7 +16,7 @@ def top_movie_credits():
     @task_group
     def fetch_and_prep(api, api_path, 
                          api_arg_builder, arg_fields,
-                         gcs_prefix, table_config, api_root,
+                         gcs_prefix, table_config, data_config,
                          return_data=None,
                          **kwargs):
         call_builder = ingestion_tasks.setup_api_call(
@@ -41,9 +40,9 @@ def top_movie_credits():
 
         loaded_gcs_path = fetched['gcs_path']
 
-        transformed_uri = transform_tasks.gcs_transform_for_bq(loaded_gcs_path,
+        transformed_uri = transform_tasks.gcs_transform_for_bq(gcs_path=loaded_gcs_path,
                                                                 table_config=table_config,
-                                                                api_root=api_root)
+                                                                data_config=data_config)
         result['transformed_uri'] = transformed_uri
         fetched >> transformed_uri
 
@@ -58,8 +57,9 @@ def top_movie_credits():
         
         table_config = config['table_config']
         bq_schema_config = table_config['schema']
-        bigquery_dataset = config['bigquery_dataset']
-        api_root = config.get('api_root')
+        bigquery_config = config['bigquery_config']
+        bigquery_dataset = bigquery_config['dataset']
+        data_config = config.get('data_config')
         api = config['api']
         api_path = config['api_path']
         gcs_prefix = initial_setup['gcs_prefix']
@@ -72,7 +72,7 @@ def top_movie_credits():
             arg_fields=arg_fields,
             gcs_prefix=gcs_prefix,
             table_config=table_config,
-            api_root=api_root,
+            data_config=data_config,
             return_data=return_data
         ).expand(**kwargs)
         

@@ -44,14 +44,13 @@ def create_arg_builder(arg_fields, api=None, api_path=None):
     return arg_builder
 
 
-def create_table_config(raw_schema, row_id=None, arg_fields=None, source_type=None):
+def create_table_config(raw_schema, row_id=None, source_type=None, partition=None):
     """Creates BigQuery table config with schema + metadata."""
     logger.trace('Creating table config')
     if not raw_schema:
         raise ValueError('raw_schema must be provided')
 
     row_id = row_id or []
-    arg_fields = arg_fields or {}
 
     # Cols from the raw data
     schema = []
@@ -64,51 +63,61 @@ def create_table_config(raw_schema, row_id=None, arg_fields=None, source_type=No
     # Cols for all workflows
     schema.append({'name': BQ_METADATA_COL, 'type': 'JSON'})
     schema.append({'name': BQ_TIMESTAMP_COL, 'type': 'TIMESTAMP'})
-    # for name, data in arg_fields.items():
-    #     if data.get('data_type'):
-    #         schema.append({'name': name, 'type': data['data_type']})
 
     table_config = {'schema': schema}
-    if source_type:
-        table_config['source_type'] = source_type
+    # if source_type:
+    #     table_config['source_type'] = source_type
     if row_id:
         table_config['row_id'] = row_id
+    if partition:
+        table_config['partition'] = partition
 
     return table_config
 
 
-def create_config(datasource_name, raw_config, dataset=None, source_type='json'):
+def create_config(datasource_name, raw_config, dataset=None):
     """
     Create a full endpoint config by combining:
       - general info (datasource_name, dataset, source_type)
       - endpoint metadata from raw_config
     """
+
+    keys_to_keep = ['api_path', 'arg_fields']
+    config = {key: raw_config[key] for key in keys_to_keep if key in raw_config}
+
     dataset = dataset or f'airflow_{datasource_name}'
-    api_path = raw_config['api_path']
-    raw_schema = raw_config.get('api_schema', {})
-    row_id = raw_config.get('row_id', [])
-    arg_fields = raw_config.get('arg_fields', {})
-    api_root = raw_config.get('api_root')
+    bigquery_config = {'dataset': dataset}
+    if raw_config.get('bigquery_table'):
+        bigquery_config['table'] = raw_config['bigquery_table']
+    config['bigquery_config'] = bigquery_config
 
-    config = {
-        'api': datasource_name,
-        'api_path': api_path,
-        'bigquery_dataset': dataset,
-        'table_config': create_table_config(
-            raw_schema,
-            row_id=row_id,
-            arg_fields=arg_fields,
-            source_type=source_type,
-        )
-    }
+    config['api'] = datasource_name
 
-    if arg_fields:
+    raw_schema = raw_config.get('raw_schema')
+
+    table_config = create_table_config(
+        raw_schema,
+        row_id = raw_config.get('row_id', []),
+        partition = raw_config.get('partition')
+    )
+    config['table_config'] = table_config
+
+    data_config_keys = ['source_type', 'fieldnames', 'delimiter', 'data_root']
+    data_config = {key: raw_config[key] for key in data_config_keys if key in raw_config}
+    if data_config:
+        if data_config.get('source_type') == 'csv':
+            data_config['fieldnames'] = data_config.get('fieldnames', list(raw_schema))
+        config['data_config'] = data_config
+
+    storage_config_keys = ['gcs_bucket', 'gcs_path']
+    storage_config = {key: raw_config[key] for key in storage_config_keys if key in raw_config}
+    if storage_config:
+        config['storage_config'] = storage_config
+
+    if raw_config.get('arg_fields'):
         config['api_arg_builder'] = create_arg_builder(
-            arg_fields, api=datasource_name, api_path=api_path
+            raw_config['arg_fields'], api=datasource_name, api_path=raw_config['api_path']
         )
-        config['arg_fields'] = arg_fields
-    if api_root:
-        config['api_root'] = api_root
-    
+
 
     return config

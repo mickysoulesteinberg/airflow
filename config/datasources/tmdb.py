@@ -1,10 +1,6 @@
-API_NAME = 'tmdb'
-BIGQUERY_DATASET = 'airflow_tmdb'
-SOURCE_TYPE = 'json'
-
 DISCOVER_MOVIES_RAW = {
     'api_path': 'discover_movies',
-    'api_schema': {
+    'raw_schema': {
         'id': 'INTEGER',
         'title': 'STRING',
         'release_date': 'DATE',
@@ -12,7 +8,7 @@ DISCOVER_MOVIES_RAW = {
         'vote_average': 'FLOAT',
         'vote_count': 'INTEGER'
     },
-    'api_root': ['results'],
+    'data_root': ['results'],
     'row_id': ['id'],
     'arg_fields': {
         'year': {
@@ -34,7 +30,7 @@ DISCOVER_MOVIES_RAW = {
 
 CREDITS_RAW = {
     'api_path': 'movies_credits',
-    'api_schema': {
+    'raw_schema': {
         'id': 'INTEGER',
         'cast': 'JSON',
         'crew': 'JSON'
