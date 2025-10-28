@@ -20,8 +20,6 @@ def ssa_names():
     bigquery_table_name = bigquery_config['table']
     data_config = config['data_config']
     storage_config = config['storage_config']
-    gcs_bucket = storage_config['gcs_bucket']
-    gcs_path = storage_config['gcs_path']
 
     created_staging_table = loader_tasks.create_staging_table(
         schema_config=bq_schema_config,

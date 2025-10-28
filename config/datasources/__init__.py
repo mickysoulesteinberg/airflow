@@ -12,3 +12,7 @@ TMDB_CREDITS = create_config('tmdb', tmdb.CREDITS_RAW)
 # SSA
 from config.datasources import ssa
 SSA_NAMES = create_config('ssa', ssa.SSA_NAMES_RAW)
+
+# SPOTIFY
+from config.datasources import spotify
+SPOTIFY_ARTISTS = create_config('spotify', spotify.ARTISTS_RAW)

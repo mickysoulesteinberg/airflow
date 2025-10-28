@@ -150,7 +150,7 @@ def gcs_transform_and_store(gcs_input, schema_config, source_type=None,
         raise ValueError('Schema must be provided via schema_config or table_config')
     
     # Parse GCS input to get the bucket and the list of paths
-    uris, paths, bckt_name = parse_gcs_input(gcs_input, client=client, project_id=project_id, bucket_name=source_bucket)
+    _, paths, _ = parse_gcs_input(gcs_input, client=client, project_id=project_id, bucket_name=source_bucket)
 
     new_uris = []
     # Transform and store for each path

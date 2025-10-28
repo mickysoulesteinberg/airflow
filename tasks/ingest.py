@@ -6,6 +6,7 @@ from pipeline.ingest import upload_json_to_gcs_og, upload_json_to_gcs
 from pipeline.dag_helpers import create_gcs_prefix, create_gcs_file_name
 from core.utils import join_gcs_path
 from utils.helpers import get_valid_kwargs
+from core.api import get_oauth2_token
 
 from config.logger import get_logger
 logger = get_logger(__name__)
@@ -20,6 +21,10 @@ def setup_etl(**kwargs):
         context = get_current_context()
         dag_id = context['dag'].dag_id
         return_dict['gcs_prefix'] = create_gcs_prefix(dag_id, api, api_path)
+
+    if kwargs.get('get_token'):
+        token_data = get_oauth2_token(api)
+        return_dict['token_data'] = token_data
 
     return return_dict
 

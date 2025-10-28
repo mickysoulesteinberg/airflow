@@ -19,6 +19,7 @@ def top_movie_credits():
                          gcs_prefix, table_config, data_config,
                          return_data=None,
                          **kwargs):
+        
         call_builder = ingestion_tasks.setup_api_call(
             api_arg_builder=api_arg_builder,
             arg_fields=arg_fields,
@@ -115,7 +116,8 @@ def top_movie_credits():
         config=TMDB_DISCOVER_MOVIES,
         bigquery_table_name='top_movies',
         return_data={'movie_id': 'results[].id'},
-        year=list(range(2000,2001))
+        year=list(range(1955,1960)),
+        page=[1,2]
     )['movie_id']
 
     etl_workflow(
