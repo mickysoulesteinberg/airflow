@@ -1,5 +1,5 @@
 from core.gcs import load_file_from_gcs, with_gcs_client, upload_from_string
-from core.utils import resolve_gcs_uri, extract_gcs_prefix, join_gcs_path, collect_list
+from core.utils import resolve_gcs_uri, extract_gcs_prefix, join_gcs_path, collect_list, extract_gcs_file_name
 from pipeline.utils import parse_gcs_input
 import os, json, csv
 from io import StringIO
@@ -23,7 +23,7 @@ def transform_record(record, schema_config, context_values=None,  metadata=None)
             value = metadata
         elif name in context_values:
             value = context_values[name]
-            logger.trace(f'Setting value for {name} from context: {value}')
+            logger.micro(f'Setting value for {name} from context: {value}')
         else:
             value = record.get(source)
 
@@ -42,6 +42,22 @@ def json_drill_down(data, root):
             raise KeyError(f'Key {key} not found in JSON data')
     return data
 
+def get_context_value(key, path=None):
+    if key=='FILE_NAME':
+        value = extract_gcs_file_name(path)
+    logger.trace(f'get_context_value: {key}: {value}')
+    return value
+
+def get_context_values(schema_config, path=None):
+    context_values = {}
+    for col in schema_config:
+        logger.trace(f'get_context_values: col={col}')
+        if col.get('source')=='CONTEXT':
+            name = col['name']
+            logger.trace(name)
+            context_values[name] = get_context_value(name, path=path)
+    logger.trace(f'get_context_values: path={path}, context_values={context_values}')
+    return context_values
 
 @with_gcs_client
 def gcs_transform_and_store_file(path, schema_config,
@@ -67,7 +83,9 @@ def gcs_transform_and_store_file(path, schema_config,
     # Update metadat
     metadata = metadata or {}
     metadata['gcs_path'] = path
-    logger.micro(f'gcs_transform_and_store_file: Updating metadata with gcs_path: {path}')
+    logger.trace(f'gcs_transform_and_store_file: Updating metadata with gcs_path: {path}')
+
+    context_values = get_context_values(schema_config, path=path)
 
     # Transform data depending on source type
     if source_type is None:
@@ -86,7 +104,7 @@ def gcs_transform_and_store_file(path, schema_config,
             source_metadata = json_drill_down(json_data, metadata_root)
             metadata['source_metadata'] = source_metadata
 
-        transformed_records = [transform_record(record, schema_config, metadata=metadata) for record in collect_list(source_data)]
+        transformed_records = [transform_record(record, schema_config, metadata=metadata, context_values=context_values) for record in collect_list(source_data)]
         logger.trace(f'gcs_transform_and_store_file: transformed rows sample = {transformed_records[:2]}')
 
 
@@ -102,7 +120,7 @@ def gcs_transform_and_store_file(path, schema_config,
         csv_data = list(reader)
         logger.trace(f'gcs_transform_and_store_file: csv_data sample = {csv_data[:2]}')
 
-        transformed_records = [transform_record(record, schema_config, metadata=metadata) for record in csv_data]
+        transformed_records = [transform_record(record, schema_config, metadata=metadata, context_values=context_values) for record in csv_data]
         logger.trace(f'gcs_transform_and_store_file: transformed rows sample={transformed_records[:2]}')
 
     else:

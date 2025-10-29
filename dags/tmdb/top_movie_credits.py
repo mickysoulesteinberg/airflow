@@ -9,6 +9,8 @@ from config.datasources import TMDB_DISCOVER_MOVIES, TMDB_CREDITS
 from config.logger import get_logger
 logger = get_logger(__name__)
 
+YEARS=list(range(1960,1965))
+PAGES=[1,2]
 
 @dag()
 def top_movie_credits():
@@ -116,8 +118,8 @@ def top_movie_credits():
         config=TMDB_DISCOVER_MOVIES,
         bigquery_table_name='top_movies',
         return_data={'movie_id': 'results[].id'},
-        year=list(range(1955,1960)),
-        page=[1,2]
+        year=YEARS,
+        page=PAGES
     )['movie_id']
 
     etl_workflow(

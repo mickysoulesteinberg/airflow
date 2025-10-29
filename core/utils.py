@@ -119,6 +119,13 @@ def extract_gcs_prefix(input_str):
                  input_str, prefix)
     return prefix
 
+def extract_gcs_file_name(input_str):
+    '''
+    Returns the file name (with extension) of a GCS path pattern.
+    '''
+    prefix, _, file_name = input_str.rpartition('/')
+    return file_name
+
 
 def format_stage_merge_query(staging_table, final_table, schema, merge_cols):
     schema_cols = [col['name'] for col in schema]

@@ -69,7 +69,7 @@ class ColorFormatter(logging.Formatter):
 
 # Logger setup
 logger = logging.getLogger('names')
-logger.setLevel(logging.DEBUG)  # global threshold
+logger.setLevel(logging.TRACE)  # global threshold
 
 # Avoid duplicate handlers if imported multiple times
 if not logger.handlers:

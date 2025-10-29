@@ -44,7 +44,7 @@ def create_arg_builder(arg_fields, api=None, api_path=None):
     return arg_builder
 
 
-def create_table_config(raw_schema, row_id=None, source_type=None, partition=None):
+def create_table_config(raw_schema, row_id=None, partition=None, context_fields=None):
     """Creates BigQuery table config with schema + metadata."""
     logger.trace('Creating table config')
     if not raw_schema:
@@ -58,6 +58,16 @@ def create_table_config(raw_schema, row_id=None, source_type=None, partition=Non
         col = {'name': name, 'type': dtype}
         if name in row_id:
             col['mode'] = 'REQUIRED'
+        schema.append(col)
+
+    # Add context fields to row_id and schema
+    context_fields = context_fields or {}
+    for field, attributes in context_fields.items():
+        dtype = attributes.get('type', 'STRING')
+        col = {'name': field, 'type': dtype, 'source': 'CONTEXT'}
+        if attributes.get('row_id'):
+            col['mode'] = 'REQUIRED'
+            row_id.append(field)
         schema.append(col)
 
     # Cols for all workflows
@@ -97,8 +107,9 @@ def create_config(datasource_name, raw_config, dataset=None):
 
     table_config = create_table_config(
         raw_schema,
-        row_id = raw_config.get('row_id', []),
-        partition = raw_config.get('partition')
+        row_id=raw_config.get('row_id', []),
+        partition=raw_config.get('partition'),
+        context_fields=raw_config.get('context_fields')
     )
     config['table_config'] = table_config
 
@@ -119,5 +130,14 @@ def create_config(datasource_name, raw_config, dataset=None):
             raw_config['arg_fields'], api=datasource_name, api_path=raw_config['api_path']
         )
 
+    log_string_list = [f'create_config: Created config for {datasource_name}.']
+    for key, val in config.items():
+        if isinstance(val, dict):
+            log_string_item = f'{key}: \n\t{"\n\t".join([f'{k}: {v}' for k,v in val.items()])}'
+        else:
+            log_string_item = f'{key}: {val}'
+        log_string_list.append(log_string_item)
+    log_string = '\n------------\n'.join(log_string_list)
+    logger.info(log_string)
 
     return config

@@ -7,6 +7,7 @@ SSA_NAMES_RAW = {
     'row_id': ['name', 'sex'],
     'source_type': 'csv',
     'gcs_bucket': 'ssa_data_bucket',
-    'gcs_path': 'names/yob1881*.txt',
-    'bigquery_table': 'names'
+    'gcs_path': 'names/yob*.txt',
+    'bigquery_table': 'names',
+    'context_fields': {'FILE_NAME': {'row_id': True}}
 }
