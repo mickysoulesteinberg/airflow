@@ -85,27 +85,6 @@ def upload_json_to_gcs(data, path, metadata=None, new_line=False,
     return uri
 
 
-@with_gcs_client
-def upload_json_to_gcs_og_og(data, path, wrap=True, new_line=False,
-                       client=None, project_id=None,
-                       bucket_override=None):
-    bucket_name = get_default_bucket(bucket_override)
-    uri = resolve_gcs_uri(path, bucket_name = bucket_name)
-    if wrap:
-        # TODO don't need this wrap logic, and don't need wrapped data. Must change schema before removing.
-        data = {'uri': uri, 'data': data}
-    data_string = ''
-    if new_line:
-        data_string = '\n'.join(json.dumps(r) for r in data)
-    else:
-        data_string = json.dumps(data)
-
-    upload_from_string(data_string, path, client=client, project_id=project_id, bucket_name=bucket_name)
-
-    logger.info(f'Wrote file: {uri}')
-
-    return uri
-
 @with_config(['api_config'])
 def resolve_api_arg_builder(config=None, *, api_arg_builder=None):
     return api_arg_builder

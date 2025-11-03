@@ -1,7 +1,7 @@
 from core.env import resolve_default_bucket
 import textwrap
 from config.logger import get_logger
-from config.datasources_og import BQ_TIMESTAMP_COL
+from config.datasources import BQ_TIMESTAMP_COL
 
 logger = get_logger(__name__)
 
