@@ -1,4 +1,7 @@
-import inspect, logging
+import inspect
+
+from config.logger import get_logger
+logger = get_logger(__name__)
 
 def get_valid_kwargs(fn,  kwargs):
     '''
@@ -13,6 +16,7 @@ def get_valid_kwargs(fn,  kwargs):
     Returns:
         dict: Filtered kwargs safe to pass to fn
     '''
+    logger.micro(f'get_valid_kwargs: getting kwargs for function {fn.__name__}, input kwargs={kwargs}')
     sig = inspect.signature(fn)
     valid_keys = sig.parameters.keys()
     filtered_kwargs = {k: v for k, v in  kwargs.items() if k in valid_keys}
@@ -20,6 +24,6 @@ def get_valid_kwargs(fn,  kwargs):
     # Log dropped keywords in case of unintential lost kwargs
     dropped_kwargs = set( kwargs) - set(filtered_kwargs)
     if dropped_kwargs:
-        logging.debug(f'[helpers.get_valid_kwargs] Dropped invalid kwargs for {fn.__name__}: {dropped_kwargs} ')
+        logger.debug(f'[helpers.get_valid_kwargs] Dropped invalid kwargs for {fn.__name__}: {dropped_kwargs} ')
     
     return filtered_kwargs

@@ -5,16 +5,17 @@ import os, json, csv
 from io import StringIO
 from config.logger import get_logger
 from core.env import resolve_bucket
-from config.datasources import BQ_METADATA_COL
+from config.datasources import BQ_METADATA_COL, RAW_DATA_KEY
+from config.config_wrapper import with_config
 
 logger = get_logger(__name__)
 
-def transform_record(record, schema_config, context_values=None,  metadata=None):
+def transform_record(record, schema, context_values=None,  metadata=None):
     logger.micro(f'transform_record: record={record}')
     context_values = context_values or {}
     metadata =  metadata or {}
     row = {}
-    for col in schema_config:
+    for col in schema:
         name = col['name']
         source = col.get('source', name)
 
@@ -48,9 +49,9 @@ def get_context_value(key, path=None):
     logger.trace(f'get_context_value: {key}: {value}')
     return value
 
-def get_context_values(schema_config, path=None):
+def get_context_values(schema, path=None):
     context_values = {}
-    for col in schema_config:
+    for col in schema:
         logger.trace(f'get_context_values: col={col}')
         if col.get('source')=='CONTEXT':
             name = col['name']
@@ -60,7 +61,7 @@ def get_context_values(schema_config, path=None):
     return context_values
 
 @with_gcs_client
-def gcs_transform_and_store_file(path, schema_config,
+def gcs_transform_and_store_file(path, schema,
                                  source_type=None,
                                  new_dir=None, new_file_name=None,
                                  data_root=None, metadata_root=None,
@@ -85,7 +86,7 @@ def gcs_transform_and_store_file(path, schema_config,
     metadata['gcs_path'] = path
     logger.trace(f'gcs_transform_and_store_file: Updating metadata with gcs_path: {path}')
 
-    context_values = get_context_values(schema_config, path=path)
+    context_values = get_context_values(schema, path=path)
 
     # Transform data depending on source type
     if source_type is None:
@@ -104,7 +105,7 @@ def gcs_transform_and_store_file(path, schema_config,
             source_metadata = json_drill_down(json_data, metadata_root)
             metadata['source_metadata'] = source_metadata
 
-        transformed_records = [transform_record(record, schema_config, metadata=metadata, context_values=context_values) for record in collect_list(source_data)]
+        transformed_records = [transform_record(record, schema, metadata=metadata, context_values=context_values) for record in collect_list(source_data)]
         logger.trace(f'gcs_transform_and_store_file: transformed rows sample = {transformed_records[:2]}')
 
 
@@ -120,7 +121,7 @@ def gcs_transform_and_store_file(path, schema_config,
         csv_data = list(reader)
         logger.trace(f'gcs_transform_and_store_file: csv_data sample = {csv_data[:2]}')
 
-        transformed_records = [transform_record(record, schema_config, metadata=metadata, context_values=context_values) for record in csv_data]
+        transformed_records = [transform_record(record, schema, metadata=metadata, context_values=context_values) for record in csv_data]
         logger.trace(f'gcs_transform_and_store_file: transformed rows sample={transformed_records[:2]}')
 
     else:
@@ -146,7 +147,7 @@ def gcs_transform_and_store_file(path, schema_config,
 
 
 @with_gcs_client
-def gcs_transform_and_store(gcs_input, schema_config, source_type=None,
+def gcs_transform_and_store(gcs_input, schema, source_type=None,
                             new_dir=None, new_file_name=None, 
                             data_root=None, metadata_root=None,
                             delimiter=None, fieldnames=None,
@@ -164,8 +165,8 @@ def gcs_transform_and_store(gcs_input, schema_config, source_type=None,
 
     logger.debug(f'gcs_transform_and_store: source_type={source_type}')
 
-    if not schema_config:
-        raise ValueError('Schema must be provided via schema_config or table_config')
+    if not schema:
+        raise ValueError('Schema must be provided via schema or table_config')
     
     # Parse GCS input to get the bucket and the list of paths
     _, paths, _ = parse_gcs_input(gcs_input, client=client, project_id=project_id, bucket_name=source_bucket)
@@ -174,7 +175,7 @@ def gcs_transform_and_store(gcs_input, schema_config, source_type=None,
     # Transform and store for each path
     for path in paths:
         logger.debug(f'source_type={source_type}')
-        new_uri = gcs_transform_and_store_file(path, schema_config, source_type=source_type, new_dir=new_dir, new_file_name=new_file_name,
+        new_uri = gcs_transform_and_store_file(path, schema, source_type=source_type, new_dir=new_dir, new_file_name=new_file_name,
                                            data_root=data_root, metadata_root=metadata_root,
                                            delimiter=delimiter, fieldnames=fieldnames,
                                            client=client, project_id=project_id,
@@ -186,7 +187,30 @@ def gcs_transform_and_store(gcs_input, schema_config, source_type=None,
     return new_uris
 
 
-def transform_csv_records(content, schema_config, context_values=None, 
+
+@with_config(['storage_config', 'bigquery_config', 'data_config'])
+def gcs_transform_for_bq(config=None, *,
+                         # Storage Config
+                         gcs_bucket=None, gcs_path=None,
+                         # BigQuery Config
+                         bigquery_schema=None,
+                         # Data Config
+                         data_root=None, source_type=None, source_delimiter=None, source_field_names=None,
+                         # Optional Overrides
+                         raw_data_root=RAW_DATA_KEY, metadata_root=BQ_METADATA_COL, new_dir=None
+                         ):
+
+    # Gte the root for the raw data in the GCS file
+    full_data_root = collect_list(raw_data_root, data_root)
+
+    transformed_uris = gcs_transform_and_store(gcs_path, schema=bigquery_schema,
+                                               source_type=source_type, delimiter=source_delimiter, fieldnames=source_field_names,
+                                               data_root=full_data_root, metadata_root=metadata_root, new_dir=new_dir,
+                                               source_bucket_override=gcs_bucket)
+
+    return transformed_uris
+
+def transform_csv_records(content, schema, context_values=None, 
                           metadata=None, delimiter=None, fieldnames=None):
     metadata = metadata or {}
     logger.debug(f'transform_csv_records: Beginning transform of data={content[:100]}')
@@ -195,13 +219,13 @@ def transform_csv_records(content, schema_config, context_values=None,
     csv_data = list(reader)
     logger.trace(f'transform_csv_records: csv_data sample={csv_data[:2]}')
 
-    rows = [transform_record(record, schema_config, 
+    rows = [transform_record(record, schema, 
                              context_values=context_values, 
                              metadata=metadata) for record in csv_data]
     logger.trace(f'transform_csv_records: transformed rows sample={rows[:2]}')
     return rows
 
-def transform_json_records(content, schema_config, context_values=None,
+def transform_json_records(content, schema, context_values=None,
                            metadata=None, json_root=None):
     metadata = metadata or {}
     logger.debug(f'transform_json_records: Beginning transform of data={content[:100]}')
@@ -219,10 +243,8 @@ def transform_json_records(content, schema_config, context_values=None,
     # At this point, json_data could be a dict (single record) or list (multiple records)
     if not isinstance(json_data, list):
         json_data = [json_data]
-    rows = [transform_record(record, schema_config, 
+    rows = [transform_record(record, schema, 
                              context_values=context_values,
                              metadata=metadata) for record in json_data]
     logger.trace(f'transform_json_records: transformed rows sample = {rows[:2]}')
     return rows
-
-

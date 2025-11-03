@@ -34,7 +34,7 @@ def spotify_pipeline():
         gcs_file_name = make_file_name(f'artist{artist_id}')
         return join_gcs_path(gcs_prefix, gcs_file_name)
 
-    ingestion_tasks.api_fetch_and_load_og(
+    ingestion_tasks.api_fetch_and_load_og_og(
         api = API,
         api_path = api_path,
         api_args = {

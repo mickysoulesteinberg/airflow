@@ -10,15 +10,18 @@ DISCOVER_MOVIES_RAW = {
     },
     'data_root': ['results'],
     'row_id': ['id'],
-    'api_arg_fields': {
+    'arg_fields': {
         'year': {
+            # 'data_type': 'INTEGER',
             'param' : 'primary_release_year'
         },
         'sort_by': {
+            # 'data_type': 'STRING',
             'default': 'revenue.desc',
             'param': 'sort_by'
         },
         'page': {
+            # 'data_type': 'INTEGER',
             'default': 1,
             'param': 'page'
         }
@@ -33,7 +36,7 @@ CREDITS_RAW = {
         'crew': 'JSON'
     },
     'row_id':  ['id'],
-    'api_arg_fields': {
+    'arg_fields': {
         'movie': {
             # not including data_type because not in the final BQ table
             'path_var': 'movie_id'

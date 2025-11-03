@@ -9,7 +9,7 @@ SSA_NAMES_RAW = {
     'row_id': ['name', 'sex'],
     'source_type': 'csv',
     'gcs_bucket': GCS_BUCKET,
-    'gcs_path': 'names/yob188*.txt',
+    'gcs_path': 'names/yob*.txt',
     'bigquery_table': 'names',
     'context_fields': {'FILE_NAME': {'row_id': True}}
 }
@@ -22,7 +22,7 @@ SSA_STATE_NAMES_RAW = {
         'name': 'STRING',
         'num_births': 'INTEGER'
     },
-    'bigquery_row_id': ['state', 'sex', 'year', 'name'],
+    'row_id': ['state', 'sex', 'year', 'name'],
     'source_type': 'csv',
     'gcs_bucket': GCS_BUCKET,
     'gcs_path': 'namesbystate/M*.TXT',
@@ -37,7 +37,7 @@ SSA_TERRITORY_NAMES_RAW = {
         'name': 'STRING',
         'num_births': 'INTEGER'
     },
-    'bigquery_row_id': ['state', 'sex', 'year', 'name'],
+    'row_id': ['state', 'sex', 'year', 'name'],
     'source_type': 'csv',
     'gcs_bucket': GCS_BUCKET,
     'gcs_path': 'namesbyterritory/*.TXT',

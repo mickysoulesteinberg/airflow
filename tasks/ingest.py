@@ -2,11 +2,12 @@ from airflow.decorators import task
 from airflow.operators.python import get_current_context
 import jmespath
 from core.api import api_get
-from pipeline.ingest import upload_json_to_gcs_og, upload_json_to_gcs
+from pipeline.ingest import upload_json_to_gcs_og_og
 from pipeline.dag_helpers import create_gcs_prefix, create_gcs_file_name
 from core.utils import join_gcs_path
 from utils.helpers import get_valid_kwargs
 from core.api import get_oauth2_token
+import pipeline.ingest as pipeline
 
 from config.logger import get_logger
 logger = get_logger(__name__)
@@ -28,9 +29,27 @@ def setup_etl(**kwargs):
 
     return return_dict
 
+@task(multiple_outputs=True)
+def setup_api_call(config=None, **overrides):
+    
+    # Resolve api config
+    api_arg_builder = pipeline.resolve_api_arg_builder(config=config, **overrides)
+    api_arg_fields = pipeline.resolve_api_arg_fields(config=config, **overrides)
+
+    # Get input call kwargs and build api_args
+    api_call_kwargs = {f: overrides[f] for f in api_arg_fields if f in overrides}
+    api_args = api_arg_builder(**api_call_kwargs)
+
+    # Create gcs file name
+    context = get_current_context()
+    suffix = context['ds_nodash']
+    gcs_file_name = create_gcs_file_name(api_call_kwargs, suffix=suffix)
+
+    return {'gcs_file_name': gcs_file_name, 'api_args': api_args, 'api_call_kwargs': api_call_kwargs}
+
 
 @task(multiple_outputs=True)
-def setup_api_call(config=None, **kwargs):
+def setup_api_call_og(config=None, **kwargs):
     
     # Get input fields
     config = config or {}
@@ -52,8 +71,33 @@ def setup_api_call(config=None, **kwargs):
 
     return {'gcs_file_name': gcs_file_name, 'api_args': api_args, 'metadata': api_call_kwargs}
 
+
 @task(multiple_outputs=True)
-def api_fetch_and_load(api, api_path, api_args, 
+def api_fetch_and_load(gcs_file_name, gcs_prefix, *, config=None, return_data=None, metadata=None, **overrides):
+
+    # Get API Args
+    api_args = pipeline.get_api_args(config=config, **overrides)
+
+    # Fetch data from API
+    data = pipeline.api_fetch(config=config, api_args=api_args)
+
+    # Build storage path
+    gcs_path = join_gcs_path(gcs_prefix, gcs_file_name)
+    return_dict = {'gcs_path': gcs_path}
+    logger.trace(f'Built storage path={gcs_path}')
+    
+    pipeline.upload_json_to_gcs(data=data, path=gcs_path, metadata=metadata)
+    logger.trace(f'Uploaded to gcs')
+
+    # Get data to return if requested
+    if return_data:
+        for key, expr in return_data.items():
+            return_dict[key] = jmespath.search(expr, data)
+    logger.trace(f'Built return Xcom data = {return_data}')
+    return return_dict
+
+@task(multiple_outputs=True)
+def api_fetch_and_load_og(api, api_path, api_args, 
                        gcs_path=None, gcs_prefix=None, gcs_file_name=None,
                        bucket_override=None,
                        return_data=None,
@@ -76,7 +120,7 @@ def api_fetch_and_load(api, api_path, api_args,
 
     # Upload to GCS if path provided
     if gcs_path:
-        upload_json_to_gcs(data, gcs_path, metadata=metadata, bucket_override=bucket_override)
+        pipeline.upload_json_to_gcs(data, gcs_path, metadata=metadata, bucket_override=bucket_override)
         return_dict['gcs_path'] = gcs_path
 
     # Get data to return if requested
@@ -88,7 +132,7 @@ def api_fetch_and_load(api, api_path, api_args,
 
 
 @task(multiple_outputs=True)
-def api_fetch_and_load_og(api=None, api_path=None, api_args=None, 
+def api_fetch_and_load_og_og(api=None, api_path=None, api_args=None, 
                        gcs_path=None, gcs_prefix=None, gcs_file_name=None,
                        bucket_override=None,
                        return_data=None, api_call_dict=None):
@@ -123,7 +167,7 @@ def api_fetch_and_load_og(api=None, api_path=None, api_args=None,
 
     # Upload to GCS if path provided
     if gcs_path:
-        upload_json_to_gcs_og(data, gcs_path, bucket_override=bucket_override)
+        upload_json_to_gcs_og_og(data, gcs_path, bucket_override=bucket_override)
         return_dict['gcs_path'] = gcs_path
 
     # Get data to return if requested

@@ -42,6 +42,7 @@ x-airflow-common: &airflow-common
     - ${AIRFLOW_PROJ_DIR:-.}/core:/opt/airflow/core
     - ${AIRFLOW_PROJ_DIR:-.}/pipeline:/opt/airflow/pipeline
     - ${AIRFLOW_PROJ_DIR:-.}/tasks:/opt/airflow/tasks
+    - ${AIRFLOW_PROJ_DIR:-.}/task_groups:/opt/airflow/task_groups
     - ${AIRFLOW_PROJ_DIR:-.}/utils:/opt/airflow/utils
     # --Scripts
     - ${AIRFLOW_PROJ_DIR:-.}/scripts:/opt/airflow/scripts

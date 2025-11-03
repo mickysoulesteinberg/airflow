@@ -1,7 +1,7 @@
 from core.env import resolve_default_bucket
 import textwrap
 from config.logger import get_logger
-from config.datasources import BQ_TIMESTAMP_COL
+from config.datasources_og import BQ_TIMESTAMP_COL
 
 logger = get_logger(__name__)
 
@@ -191,3 +191,20 @@ def collect_list(*args):
                 full_list.append(arg)
     logger.trace(f'collect_list_of_strings: concated_list={full_list}')
     return full_list
+
+def get_table_details_from_schema(schema):
+    partition_config, clustering, row_id = None, [], []
+    for col in schema:
+
+        if col.get('ROW_ID'):
+            row_id.append(col['name'])
+        if col.get('PARTITION'):
+            if partition_config:
+                logger.warning(f'get_table_details_from_schema: Multiple columns marked with PARTITION')
+            partition_config = {'field': col['name'], 'type': col['PARTITION']}
+        if partition_config:
+            clustering = [row for row in row_id if row!=partition_config['field']]
+        else:
+            clustering = row_id
+        clustering = clustering[:4]
+    return partition_config, clustering, row_id
