@@ -1,3 +1,11 @@
+TMDB_CONFIG_RAW = {
+    'datasource_name': 'tmdb',
+    'description': 'Data from API TMDB',
+    'default_config': {
+        'api_name': 'tmdb'
+    }
+}
+
 DISCOVER_MOVIES_RAW = {
     'api_path': 'discover_movies',
     'raw_schema': {

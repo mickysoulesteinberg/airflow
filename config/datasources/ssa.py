@@ -1,5 +1,15 @@
 GCS_BUCKET = 'ssa_data_bucket'
 
+SSA_CONFIG_RAW = {
+    'datasource_name': 'ssa',
+    'description': 'Data from the US SSA',
+    'default_config': {
+        'gcs_bucket': GCS_BUCKET,
+        'source_type': 'csv'
+    }
+}
+
+
 SSA_NAMES_RAW = {
     'raw_schema': {
         'name': 'STRING',

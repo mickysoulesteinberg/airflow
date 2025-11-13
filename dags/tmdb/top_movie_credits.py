@@ -8,7 +8,7 @@ from config.datasources import TMDB_DISCOVER_MOVIES, TMDB_CREDITS
 from config.logger import get_logger
 logger = get_logger(__name__)
 
-YEARS=list(range(2010,205))
+YEARS=list(range(2010,2015))
 PAGES=[1,2]
 
 @dag()
