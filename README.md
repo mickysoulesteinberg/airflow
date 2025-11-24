@@ -44,25 +44,36 @@ airflow/
 │   ├── gcs.py                      # GCS upload, delete, and path resolution
 │   └── env.py                      # Environment variable resolution
 │
-├── dag_helpers/
-│   └── paths.py                    # Dynamically generates GCS paths
-│
 ├── dags/
-│   └── tmdb_pipeline.py            # Main Airflow DAG definition
+│   └── spotify/
+│       └── spotify_pipeline.py     # Mostly to test reusability of modules       
+│   └── ssa/                        # Static SSA names data GCS --> BigQuery
+│       └── ssa_names.py
+│       └── ssa_state_names.py
+│       └── ssa_territory_names.py
+│   └── tmdb/                   
+│       └── top_movie_credits.py    # TMDB (2 endpoints) --> GCS --> BigQuery
 │
-├── pipeline/
-│   └── transform.py                # JSON transformation utilities
-│
-├── schemas/
-│   └── tmdb.py                     # BigQuery schema definitions
+├── pipeline/                       # Pure python modules to use in tasks
+│   └── cleanup.py                
+│   └── dag_helpers.py              
+│   └── ingest.py               
+│   └── load.py            
+│   └── transform.py           
+│   └── utils.py               
 │
 ├── scripts/                        # Optional CLIs / ad‑hoc jobs
 │
+├── task_groups/            
+│   ├── api.py                      # Task groups for API ingestion
+│   ├── load.py                     # Task groups for loading
+|
 ├── tasks/
-│   ├── ingestion.py                # API ingestion + upload to GCS
-│   ├── loaders.py                  # GCS → BigQuery loads + MERGE
-│   ├── helpers.py                  # Misc helper tasks (dict merging, etc.)
-│   └── transforms.py               # Record‑level transformations
+│   ├── cleanup.py              
+│   ├── ingest.py                   # API ingestion + upload to GCS
+│   ├── load.py                     # GCS -> BigQuery
+│   ├── transforms.py               # Record‑level transformations
+│   └── utils.py               
 │
 ├── utils/                          # Shared utilities (e.g., config loader)
 │
@@ -71,11 +82,11 @@ airflow/
 └── .env.example                    # Template for environment variables
 ```
 
-> The structure above may evolve, but the main idea is a separation of concerns: Airflow orchestration is simple, with core data-layer code living in reusable modules.
+> The structure above may change, but the main idea is a separation of concerns: DAGs are simple, with core data-layer code living in reusable modules.
 
 ## DAG Overview
 
-**DAG ID**: `tmdb_pipeline`
+**DAG ID**: `top_movie_credits`
 **Core logic**:
 
 The following occurs twice in the DAG, first for the `discover_movies` endpoint, and then again for the `credits` endpoing
